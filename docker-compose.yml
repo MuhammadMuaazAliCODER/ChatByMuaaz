@@ -1,0 +1,26 @@
+version: '3.9'
+
+services:
+  backend:
+    build: ./backend
+    container_name: chatbymuaaz_backend
+    restart: always
+    env_file:
+      - ./backend/.env
+    ports:
+      - "5500:5500"
+    networks:
+      - chatnet
+
+  frontend:
+    build: ./frontend
+    container_name: chatbymuaaz_frontend
+    restart: always
+    ports:
+      - "80:80"
+    networks:
+      - chatnet
+
+networks:
+  chatnet:
+    driver: bridge
