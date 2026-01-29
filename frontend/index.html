@@ -3,10 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChatApp - Login</title>
+    
+    <!-- Primary Meta Tags -->
+    <title>ChatApp - Free Real-Time Messaging & Voice Chat | Sign In</title>
+    <meta name="title" content="ChatApp - Free Real-Time Messaging & Voice Chat | Sign In">
+    <meta name="description" content="Connect with friends instantly through ChatApp. Free real-time messaging, voice messages, and secure chat. Sign in or create your account today.">
+    <meta name="keywords" content="chat app, real-time messaging, voice chat, instant messaging, free chat, online chat, secure messaging, ChatByMuaaz">
+    <meta name="author" content="ChatByMuaaz">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://chatbymuaaz.online/">
+    <link rel="manifest" href="manifest.json">
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://chatbymuaaz.online/">
+    <meta property="og:title" content="ChatApp - Free Real-Time Messaging & Voice Chat">
+    <meta property="og:description" content="Connect with friends instantly through ChatApp. Free real-time messaging, voice messages, and secure chat.">
+    <meta property="og:image" content="https://chatbymuaaz.online/assets/og-image.png">
+    <meta property="og:site_name" content="ChatApp">
+    <meta property="og:locale" content="en_US">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://chatbymuaaz.online/">
+    <meta name="twitter:title" content="ChatApp - Free Real-Time Messaging & Voice Chat">
+    <meta name="twitter:description" content="Connect with friends instantly through ChatApp. Free real-time messaging, voice messages, and secure chat.">
+    <meta name="twitter:image" content="https://chatbymuaaz.online/assets/twitter-card.png">
+    
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#667eea">
+    <meta name="msapplication-TileColor" content="#667eea">
+    
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="auth.css">
-      <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    
+    <!-- Preconnect to API -->
+    <link rel="preconnect" href="https://api.chatbymuaaz.online">
+    <link rel="dns-prefetch" href="https://api.chatbymuaaz.online">
+    
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "ChatApp",
+      "alternateName": "ChatByMuaaz",
+      "url": "https://chatbymuaaz.online",
+      "description": "Free real-time messaging and voice chat application for connecting with friends instantly",
+      "applicationCategory": "CommunicationApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "ChatByMuaaz"
+      },
+      "screenshot": "https://chatbymuaaz.online/assets/screenshot.png",
+      "featureList": [
+        "Real-time messaging",
+        "Voice messages",
+        "Online status",
+        "Secure chat",
+        "Free to use"
+      ]
+    }
+    </script>
 </head>
 <body>
     <div class="auth-container">
@@ -18,54 +90,99 @@
 
             <!-- Login Form -->
             <div id="loginForm" class="auth-form">
-                <h2>Sign In</h2>
-                <form id="login">
+                <h2>Sign In to ChatApp</h2>
+                <form id="login" aria-label="Login form">
                     <div class="form-group">
                         <label for="login-username">Username</label>
-                        <input type="text" id="login-username" required placeholder="Enter your username">
+                        <input 
+                            type="text" 
+                            id="login-username" 
+                            name="username"
+                            required 
+                            placeholder="Enter your username"
+                            autocomplete="username"
+                            aria-required="true">
                     </div>
                     <div class="form-group">
                         <label for="login-password">Password</label>
-                        <input type="password" id="login-password" required placeholder="Enter your password">
+                        <input 
+                            type="password" 
+                            id="login-password" 
+                            name="password"
+                            required 
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
+                            aria-required="true">
                     </div>
-                    <button type="submit" class="btn-primary">Sign In</button>
-                    <p class="error-message" id="login-error"></p>
+                    <button type="submit" class="btn-primary" aria-label="Sign in to your account">Sign In</button>
+                    <p class="error-message" id="login-error" role="alert" aria-live="polite"></p>
                 </form>
                 <p class="switch-form">
-                    Don't have an account? <a href="#" id="showRegister">Register</a>
+                    Don't have an account? <a href="#register" id="showRegister" aria-label="Go to registration form">Register</a>
                 </p>
             </div>
 
             <!-- Register Form -->
             <div id="registerForm" class="auth-form" style="display: none;">
-                <h2>Create Account</h2>
-                <form id="register">
+                <h2>Create Your Account</h2>
+                <form id="register" aria-label="Registration form">
                     <div class="form-group">
                         <label for="register-name">Full Name</label>
-                        <input type="text" id="register-name" required placeholder="Enter your name">
+                        <input 
+                            type="text" 
+                            id="register-name" 
+                            name="name"
+                            required 
+                            placeholder="Enter your name"
+                            autocomplete="name"
+                            aria-required="true">
                     </div>
                     <div class="form-group">
                         <label for="register-username">Username</label>
-                        <input type="text" id="register-username" required placeholder="Choose a username">
+                        <input 
+                            type="text" 
+                            id="register-username" 
+                            name="username"
+                            required 
+                            placeholder="Choose a username"
+                            autocomplete="username"
+                            aria-required="true">
                     </div>
                     <div class="form-group">
                         <label for="register-email">Email</label>
-                        <input type="email" id="register-email" required placeholder="Enter your email">
+                        <input 
+                            type="email" 
+                            id="register-email" 
+                            name="email"
+                            required 
+                            placeholder="Enter your email"
+                            autocomplete="email"
+                            aria-required="true">
                     </div>
                     <div class="form-group">
                         <label for="register-password">Password</label>
-                        <input type="password" id="register-password" required placeholder="Create a password">
+                        <input 
+                            type="password" 
+                            id="register-password" 
+                            name="password"
+                            required 
+                            placeholder="Create a password"
+                            autocomplete="new-password"
+                            minlength="6"
+                            aria-required="true"
+                            aria-describedby="password-requirements">
+                        <small id="password-requirements" class="form-hint">Minimum 6 characters</small>
                     </div>
-                    <button type="submit" class="btn-primary">Register</button>
-                    <p class="error-message" id="register-error"></p>
+                    <button type="submit" class="btn-primary" aria-label="Create your account">Register</button>
+                    <p class="error-message" id="register-error" role="alert" aria-live="polite"></p>
                 </form>
                 <p class="switch-form">
-                    Already have an account? <a href="#" id="showLogin">Sign In</a>
+                    Already have an account? <a href="#login" id="showLogin" aria-label="Go to login form">Sign In</a>
                 </p>
             </div>
         </div>
     </div>
-
+    
     <script src="config.js"></script>
     <script src="auth.js"></script>
 </body>
