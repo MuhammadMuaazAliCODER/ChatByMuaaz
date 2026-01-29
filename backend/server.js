@@ -19,6 +19,7 @@ import friend from './routes/friend.routes.js';
 const app = express();
 const server = http.createServer(app);
 
+
 // Fixed: Configure CORS only once
 app.use(cors({
   origin: [process.env.CORS_ORIGIN, process.env.CORST_TEST_ORIGIN],
