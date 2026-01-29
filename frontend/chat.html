@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatApp - Chats</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="chat.css">
+     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+    <!-- Hamburger Menu Button (Mobile) -->
+    <button class="hamburger" id="hamburgerBtn">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <!-- Sidebar Overlay (Mobile) -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <div class="chat-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="user-info">
+                    <div class="avatar" id="currentUserAvatar"></div>
+                    <div class="user-details">
+                        <h3 id="currentUserName">User</h3>
+                        <span class="status online">Online</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" id="themeToggle" title="Toggle theme">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                    <button class="icon-btn" id="friendRequestsBtn" title="Friend Requests">
+                        <span>👥</span>
+                        <span class="badge" id="requestsBadge" style="display: none;">0</span>
+                    </button>
+                    <button class="icon-btn" id="logoutBtn" title="Logout">
+                        <span><i class="fa-solid fa-right-from-bracket fa-rotate-180" style="color: #ff0000;"></i></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="🔍 Search users...">
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="chats">Chats</button>
+                <button class="tab" data-tab="friends">Friends</button>
+            </div>
+
+            <!-- Chats List -->
+            <div class="tab-content active" id="chatsTab">
+                <div id="chatsList" class="chats-list">
+                    <div class="empty-state">
+                        <p>No chats yet</p>
+                        <small>Search for users to start chatting</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Friends List -->
+            <div class="tab-content" id="friendsTab">
+                <div class="friends-actions">
+                    <button class="btn-secondary" id="addFriendBtn">+ Add Friend</button>
+                </div>
+                <div id="friendsList" class="friends-list">
+                    <div class="empty-state">
+                        <p>No friends yet</p>
+                        <small>Add friends to start chatting</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Results -->
+            <div id="searchResults" class="search-results" style="display: none;">
+                <h4>Search Results</h4>
+                <div id="searchResultsList"></div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-main">
+            <div class="welcome-screen">
+                <div class="welcome-content">
+                    <h2>💬 Welcome to ChatApp</h2>
+                    <p>Select a chat to start messaging</p>
+                    <div class="features">
+                        <div class="feature">
+                            <span>🔐</span>
+                            <span>Secure messaging</span>
+                        </div>
+                        <div class="feature">
+                            <span>⚡</span>
+                            <span>Real-time updates</span>
+                        </div>
+                        <div class="feature">
+                            <span>🎤</span>
+                            <span>Voice messages</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Chat -->
+            <div id="activeChat" style="display: none;">
+                <div class="chat-header">
+                    <div class="chat-header-left">
+                        <div class="chat-user-info">
+                            <div class="avatar" id="activeChatAvatar"></div>
+                            <div>
+                                <h3 id="activeChatName">User</h3>
+                                <span class="status" id="activeChatStatus">Offline</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-actions">
+                        <button class="icon-btn" id="chatInfoBtn" title="Chat info"></button>
+                    </div>
+                </div>
+
+                <div class="messages-container" id="messagesContainer">
+                    <div class="messages" id="messages"></div>
+                </div>
+
+                <div class="chat-input">
+                    <button class="icon-btn" id="emojiBtn" title="Emoji">😊</button>
+                    <button class="icon-btn" id="voiceBtn" title="Voice message">🎤</button>
+                    <input type="text" id="messageInput" placeholder="Type a message...">
+                    <button class="btn-send" id="sendBtn">Send</button>
+                </div>
+
+                <!-- Emoji Picker -->
+                <div id="emojiPicker" class="emoji-picker" style="display: none;">
+                    <div class="emoji-grid"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Friend Requests Modal -->
+    <div id="friendRequestsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Friend Requests</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="friendRequestsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Friend Modal -->
+    <div id="addFriendModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Friend</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <input type="text" id="friendSearchInput" placeholder="Search by username...">
+                </div>
+                <div id="friendSearchResults"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="utils.js"></script>
+    <script src="websocket.js"></script>
+    <script src="friends.js"></script>
+    <script src="chat.js"></script>
+    <script src="mobile-menu.js"></script>
+</body>
+</html>
