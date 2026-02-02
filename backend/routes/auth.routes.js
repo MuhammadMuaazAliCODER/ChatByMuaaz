@@ -44,7 +44,7 @@ router.post('/request-username-change', authenticate, requestUsernameChange);
 router.put('/change-username', authenticate, changeUsername);
 
 // Profile Update (no email verification needed)
-router.put('/update-profile' , authenticate , upload.single('profilePicture') , updateProfile);
+router.put('/update-profile' , authenticate ,    upload.single('profilePicture') , updateProfile);
 
 // Token verification and logout
 router.get('/verify', authenticate, verify);

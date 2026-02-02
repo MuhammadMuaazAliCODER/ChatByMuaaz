@@ -5,11 +5,15 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { sendVerificationEmail, sendPasswordChangeEmail, sendUsernameChangeEmail, send2FAEmail, sendForgotPasswordEmail } from '../config/emailservice.js';
 import { v2 as cloudinary } from 'cloudinary';
+import fs from 'fs';
+import { promisify } from 'util';
 
 dotenv.config();
 
-// Configure Cloudinary
+// Promisify fs.unlink for async/await
+const unlinkAsync = promisify(fs.unlink);
 
+// Configure Cloudinary
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -26,19 +30,29 @@ const generateToken = () => {
     return crypto.randomBytes(32).toString('hex');
 };
 
-// Upload image to Cloudinary
-const uploadToCloudinary = async (base64Image) => {
+// Upload image to Cloudinary from file path
+const uploadToCloudinary = async (filePath) => {
     try {
-        const result = await cloudinary.uploader.upload(base64Image, {
+        const result = await cloudinary.uploader.upload(filePath, {
             folder: 'profile_pictures',
             transformation: [
-                { width: auto, height: auto, crop: 'limit' },
+                { width: 1024, height: 1024, crop: 'limit' },
                 { quality: 'auto' }
             ]
         });
+        
+        // Delete the temp file after successful upload
+        await unlinkAsync(filePath);
+        
         return result.secure_url;
     } catch (error) {
-        throw new Error('Failed to upload image');
+        // If upload fails, still try to delete the temp file
+        try {
+            await unlinkAsync(filePath);
+        } catch (unlinkError) {
+            console.error('Error deleting temp file:', unlinkError);
+        }
+        throw new Error('Failed to upload image to Cloudinary');
     }
 };
 
@@ -494,10 +508,10 @@ export const changeUsername = async (req, res) => {
     }
 };
 
-// UPDATED: Profile update with Cloudinary image upload
+// UPDATED: Profile update with file upload from temp to Cloudinary
 export const updateProfile = async (req, res) => {
     try {
-        const { name, profilePicture } = req.body;
+        const { name } = req.body;
 
         const user = await User.findById(req.user._id);
         if (!user) {
@@ -506,13 +520,13 @@ export const updateProfile = async (req, res) => {
 
         if (name) user.name = name;
         
-        // If profilePicture is provided (base64 image), upload to Cloudinary
-        if (profilePicture) {
+        // If a file was uploaded, upload it to Cloudinary
+        if (req.file) {
             try {
-                const imageUrl = await uploadToCloudinary(profilePicture);
+                const imageUrl = await uploadToCloudinary(req.file.path);
                 user.profilePicture = imageUrl;
             } catch (uploadError) {
-                return res.status(400).json({ message: 'Failed to upload profile picture' });
+                return res.status(400).json({ message: uploadError.message });
             }
         }
 
@@ -526,6 +540,14 @@ export const updateProfile = async (req, res) => {
             user: userResponse
         });
     } catch (e) {
+        // Clean up temp file if there's an error
+        if (req.file && req.file.path) {
+            try {
+                await unlinkAsync(req.file.path);
+            } catch (unlinkError) {
+                console.error('Error deleting temp file:', unlinkError);
+            }
+        }
         res.status(500).json({ error: e.message });
     }
 };
