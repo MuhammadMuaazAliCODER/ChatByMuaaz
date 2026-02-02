@@ -1,5 +1,5 @@
 import webPush from 'web-push';
-import PushSubscription from '../models/PushSubscription.model.js';
+import PushSubscription from '../models/PushSubscription.js';
 
 // Configure web-push with VAPID keys
 // Generate keys with: npx web-push generate-vapid-keys
