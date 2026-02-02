@@ -1,3 +1,5 @@
+
+// Complete example of User schema with all fields:
 import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
@@ -27,32 +29,51 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    
-    // Email Verification
     isEmailVerified: {
         type: Boolean,
         default: false
     },
-    emailVerificationOTP: String,
-    emailVerificationExpires: Date,
-    
-    // Two-Factor Authentication
+    emailVerificationOTP: {
+        type: String
+    },
+    emailVerificationExpires: {
+        type: Date
+    },
     twoFactorEnabled: {
         type: Boolean,
         default: false
     },
-    twoFactorOTP: String,
-    twoFactorOTPExpires: Date,
-    
-    // Password Change
-    passwordChangeOTP: String,
-    passwordChangeOTPExpires: Date,
-    
-    // Username Change
-    usernameChangeOTP: String,
-    usernameChangeOTPExpires: Date,
-    pendingUsername: String
-    
-}, { timestamps: true });
+    twoFactorOTP: {
+        type: String
+    },
+    twoFactorOTPExpires: {
+        type: Date
+    },
+    passwordChangeOTP: {
+        type: String
+    },
+    passwordChangeOTPExpires: {
+        type: Date
+    },
+    passwordResetOTP: {
+        type: String
+    },
+    passwordResetOTPExpires: {
+        type: Date
+    },
+    usernameChangeOTP: {
+        type: String
+    },
+    usernameChangeOTPExpires: {
+        type: Date
+    },
+    pendingUsername: {
+        type: String
+    }
+}, {
+    timestamps: true
+});
 
-export default mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+
+export default User;

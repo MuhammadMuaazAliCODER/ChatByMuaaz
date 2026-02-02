@@ -6,6 +6,8 @@ import {
     login,
     verify2FA,
     toggle2FA,
+    forgotPassword,
+    resetPassword,
     requestPasswordChange,
     changePassword,
     requestUsernameChange,
@@ -28,7 +30,11 @@ router.post('/login', login);
 router.post('/verify-2fa', verify2FA);
 router.put('/toggle-2fa', authenticate, toggle2FA);
 
-// Password Change (requires email verification)
+// Forgot Password (public - no authentication required)
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+
+// Password Change (requires authentication)
 router.post('/request-password-change', authenticate, requestPasswordChange);
 router.put('/change-password', authenticate, changePassword);
 

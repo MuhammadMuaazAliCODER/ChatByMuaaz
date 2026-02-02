@@ -207,3 +207,61 @@ export const sendUsernameChangeEmail = async (email, otp, name, newUsername) => 
 
     await transporter.sendMail(mailOptions);
 };
+// Add this function to your existing emailservice.js file
+
+export const sendForgotPasswordEmail = async (email, otp, name) => {
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Password Reset Request',
+        html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+                    .content { background-color: #f9f9f9; padding: 30px; border-radius: 5px; margin-top: 20px; }
+                    .otp { font-size: 32px; font-weight: bold; color: #4CAF50; text-align: center; padding: 20px; background: white; border-radius: 5px; letter-spacing: 5px; }
+                    .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+                    .warning { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 20px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Password Reset Request</h1>
+                    </div>
+                    <div class="content">
+                        <h2>Hello ${name},</h2>
+                        <p>We received a request to reset your password. Use the verification code below to reset your password:</p>
+                        
+                        <div class="otp">${otp}</div>
+                        
+                        <p><strong>This code will expire in 10 minutes.</strong></p>
+                        
+                        <div class="warning">
+                            <strong>⚠️ Security Note:</strong> If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
+                        </div>
+                        
+                        <p>For security reasons, never share this code with anyone.</p>
+                    </div>
+                    <div class="footer">
+                        <p>This is an automated message, please do not reply.</p>
+                        <p>&copy; ${new Date().getFullYear()} Your App Name. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log('Forgot password email sent successfully');
+    } catch (error) {
+        console.error('Error sending forgot password email:', error);
+        throw new Error('Failed to send email');
+    }
+};

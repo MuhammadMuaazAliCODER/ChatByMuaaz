@@ -3,9 +3,17 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
-import { sendVerificationEmail, sendPasswordChangeEmail, sendUsernameChangeEmail, send2FAEmail } from '../config/emailservice.js';
+import { sendVerificationEmail, sendPasswordChangeEmail, sendUsernameChangeEmail, send2FAEmail, sendForgotPasswordEmail } from '../config/emailservice.js';
+import { v2 as cloudinary } from 'cloudinary';
 
 dotenv.config();
+
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 // Generate random 6-digit OTP
 const generateOTP = () => {
@@ -15,6 +23,22 @@ const generateOTP = () => {
 // Generate verification token
 const generateToken = () => {
     return crypto.randomBytes(32).toString('hex');
+};
+
+// Upload image to Cloudinary
+const uploadToCloudinary = async (base64Image) => {
+    try {
+        const result = await cloudinary.uploader.upload(base64Image, {
+            folder: 'profile_pictures',
+            transformation: [
+                { width: 500, height: 500, crop: 'limit' },
+                { quality: 'auto' }
+            ]
+        });
+        return result.secure_url;
+    } catch (error) {
+        throw new Error('Failed to upload image');
+    }
 };
 
 export const register = async (req, res) => {
@@ -246,6 +270,76 @@ export const toggle2FA = async (req, res) => {
     }
 };
 
+// NEW: Forgot Password - Request OTP
+export const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required' });
+        }
+
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'User with this email does not exist' });
+        }
+
+        // Generate OTP for password reset
+        const resetOTP = generateOTP();
+        const resetOTPExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        user.passwordResetOTP = resetOTP;
+        user.passwordResetOTPExpires = resetOTPExpires;
+        await user.save();
+
+        // Send forgot password email
+        await sendForgotPasswordEmail(email, resetOTP, user.name);
+
+        res.json({ 
+            message: 'Password reset code sent to your email',
+            email: email
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+// NEW: Reset Password using OTP
+export const resetPassword = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ message: 'Email, OTP, and new password are required' });
+        }
+
+        if (newPassword.length < 6 || newPassword.length > 50) {
+            return res.status(400).json({ message: 'Password must be between 6 and 50 characters' });
+        }
+
+        const user = await User.findOne({
+            email,
+            passwordResetOTP: otp,
+            passwordResetOTPExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid or expired reset code' });
+        }
+
+        // Hash new password
+        const hash = await bcrypt.hash(newPassword, 10);
+        user.password = hash;
+        user.passwordResetOTP = undefined;
+        user.passwordResetOTPExpires = undefined;
+        await user.save();
+
+        res.json({ message: 'Password reset successfully! You can now login with your new password.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
 export const requestPasswordChange = async (req, res) => {
     try {
         const { currentPassword } = req.body;
@@ -399,6 +493,7 @@ export const changeUsername = async (req, res) => {
     }
 };
 
+// UPDATED: Profile update with Cloudinary image upload
 export const updateProfile = async (req, res) => {
     try {
         const { name, profilePicture } = req.body;
@@ -409,7 +504,16 @@ export const updateProfile = async (req, res) => {
         }
 
         if (name) user.name = name;
-        if (profilePicture) user.profilePicture = profilePicture;
+        
+        // If profilePicture is provided (base64 image), upload to Cloudinary
+        if (profilePicture) {
+            try {
+                const imageUrl = await uploadToCloudinary(profilePicture);
+                user.profilePicture = imageUrl;
+            } catch (uploadError) {
+                return res.status(400).json({ message: 'Failed to upload profile picture' });
+            }
+        }
 
         await user.save();
 
@@ -427,7 +531,7 @@ export const updateProfile = async (req, res) => {
 
 export const verify = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id).select('-password -twoFactorOTP -twoFactorOTPExpires -passwordChangeOTP -passwordChangeOTPExpires -usernameChangeOTP -usernameChangeOTPExpires');
+        const user = await User.findById(req.user._id).select('-password -twoFactorOTP -twoFactorOTPExpires -passwordChangeOTP -passwordChangeOTPExpires -usernameChangeOTP -usernameChangeOTPExpires -passwordResetOTP -passwordResetOTPExpires');
         res.json(user);
     } catch (e) {
         res.status(500).json({ error: e.message });
