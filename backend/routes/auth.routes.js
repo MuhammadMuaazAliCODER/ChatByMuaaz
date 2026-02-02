@@ -17,6 +17,7 @@ import {
     logout
 } from '../controllers/auth.controller.js';
 import  authenticate  from '../middleware/auth.middleware.js';
+import upload from '../middleware/upload.middleware.js';
 
 const router = express.Router();
 
@@ -43,7 +44,7 @@ router.post('/request-username-change', authenticate, requestUsernameChange);
 router.put('/change-username', authenticate, changeUsername);
 
 // Profile Update (no email verification needed)
-router.put('/update-profile', authenticate, updateProfile);
+router.put('/update-profile' , authenticate , upload.single('profilePicture') , updateProfile);
 
 // Token verification and logout
 router.get('/verify', authenticate, verify);

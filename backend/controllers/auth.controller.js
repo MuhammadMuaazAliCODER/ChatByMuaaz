@@ -9,6 +9,7 @@ import { v2 as cloudinary } from 'cloudinary';
 dotenv.config();
 
 // Configure Cloudinary
+
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -31,7 +32,7 @@ const uploadToCloudinary = async (base64Image) => {
         const result = await cloudinary.uploader.upload(base64Image, {
             folder: 'profile_pictures',
             transformation: [
-                { width: 500, height: 500, crop: 'limit' },
+                { width: auto, height: auto, crop: 'limit' },
                 { quality: 'auto' }
             ]
         });
