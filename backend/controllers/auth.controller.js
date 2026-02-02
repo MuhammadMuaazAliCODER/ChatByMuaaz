@@ -1,15 +1,26 @@
 import User from '../models/User.js';
-
 import bcrypt from 'bcryptjs';
-
 import jwt from 'jsonwebtoken';
-
+import crypto from 'crypto';
 import dotenv from 'dotenv';
+import { sendVerificationEmail, sendPasswordChangeEmail, sendUsernameChangeEmail, send2FAEmail } from '../config/emailservice.js';
+
 dotenv.config();
+
+// Generate random 6-digit OTP
+const generateOTP = () => {
+    return crypto.randomInt(100000, 999999).toString();
+};
+
+// Generate verification token
+const generateToken = () => {
+    return crypto.randomBytes(32).toString('hex');
+};
 
 export const register = async (req, res) => {
     try {
         const { name, username, email, password } = req.body;
+        
         if (!name || !username || !email || !password) {
             return res.status(400).json({ message: 'All fields are required' });
         }
@@ -17,22 +28,95 @@ export const register = async (req, res) => {
         if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
             return res.status(400).json({ message: 'Enter a valid username' });
         }
+        
         if (!/^[\w.-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$/.test(email)) {
             return res.status(400).json({ message: 'Enter a valid email' });
         }
 
-        if (password.length < 6 && password.length > 50) {
-            return res.status(400).json({ message: 'Password must be at least 6 characters' });
+        if (password.length < 6 || password.length > 50) {
+            return res.status(400).json({ message: 'Password must be between 6 and 50 characters' });
         }
 
         const exist = await User.findOne({ $or: [{ email }, { username }] });
-        if (exist) return res.status(400).json({ message: 'User exists' });
+        if (exist) {
+            return res.status(400).json({ message: 'User already exists with this email or username' });
+        }
 
         const hash = await bcrypt.hash(password, 10);
+        
+        // Generate email verification token
+        const verificationToken = generateToken();
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-        await User.create({ name, username, email, password: hash });
+        const user = await User.create({
+            name,
+            username,
+            email,
+            password: hash,
+            emailVerificationToken: verificationToken,
+            emailVerificationExpires: verificationExpires,
+            isEmailVerified: false
+        });
 
-        res.status(201).json({ message: 'Registered successfully' });
+        // Send verification email
+        await sendVerificationEmail(email, verificationToken, name);
+
+        res.status(201).json({
+            message: 'Registration successful! Please check your email to verify your account.',
+            email: email
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const verifyEmail = async (req, res) => {
+    try {
+        const { token } = req.params;
+
+        const user = await User.findOne({
+            emailVerificationToken: token,
+            emailVerificationExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid or expired verification token' });
+        }
+
+        user.isEmailVerified = true;
+        user.emailVerificationToken = undefined;
+        user.emailVerificationExpires = undefined;
+        await user.save();
+
+        res.json({ message: 'Email verified successfully! You can now login.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const resendVerificationEmail = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (user.isEmailVerified) {
+            return res.status(400).json({ message: 'Email already verified' });
+        }
+
+        const verificationToken = generateToken();
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        user.emailVerificationToken = verificationToken;
+        user.emailVerificationExpires = verificationExpires;
+        await user.save();
+
+        await sendVerificationEmail(email, verificationToken, user.name);
+
+        res.json({ message: 'Verification email sent successfully' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -43,10 +127,90 @@ export const login = async (req, res) => {
         const { username, password } = req.body;
 
         const user = await User.findOne({ username });
-        if (!user) return res.status(400).json({ message: 'User not exists' });
+        if (!user) {
+            return res.status(400).json({ message: 'User does not exist' });
+        }
+
+        // Check if email is verified
+        if (!user.isEmailVerified) {
+            return res.status(403).json({ 
+                message: 'Please verify your email before logging in',
+                emailNotVerified: true,
+                email: user.email
+            });
+        }
 
         const match = await bcrypt.compare(password, user.password);
-        if (!match) return res.status(400).json({ message: 'Password is incorrect' });
+        if (!match) {
+            return res.status(400).json({ message: 'Password is incorrect' });
+        }
+
+        // Check if 2FA is enabled
+        if (user.twoFactorEnabled) {
+            const otp = generateOTP();
+            const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+            user.twoFactorOTP = otp;
+            user.twoFactorOTPExpires = otpExpires;
+            await user.save();
+
+            await send2FAEmail(user.email, otp, user.name);
+
+            return res.json({
+                message: 'OTP sent to your email',
+                requires2FA: true,
+                tempUserId: user._id
+            });
+        }
+
+        // Login without 2FA
+        const token = jwt.sign(
+            { _id: user._id, username: user.username },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        // Update online status
+        user.online = true;
+        await user.save();
+
+        const userResponse = user.toObject();
+        delete userResponse.password;
+        delete userResponse.twoFactorOTP;
+        delete userResponse.twoFactorOTPExpires;
+
+        res.json({ token, user: userResponse });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const verify2FA = async (req, res) => {
+    try {
+        const { userId, otp } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (!user.twoFactorOTP || !user.twoFactorOTPExpires) {
+            return res.status(400).json({ message: 'No OTP found. Please login again.' });
+        }
+
+        if (user.twoFactorOTPExpires < Date.now()) {
+            return res.status(400).json({ message: 'OTP expired. Please login again.' });
+        }
+
+        if (user.twoFactorOTP !== otp) {
+            return res.status(400).json({ message: 'Invalid OTP' });
+        }
+
+        // Clear OTP
+        user.twoFactorOTP = undefined;
+        user.twoFactorOTPExpires = undefined;
+        user.online = true;
+        await user.save();
 
         const token = jwt.sign(
             { _id: user._id, username: user.username },
@@ -54,18 +218,225 @@ export const login = async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        res.json({ token, user });
+        const userResponse = user.toObject();
+        delete userResponse.password;
+
+        res.json({ token, user: userResponse });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const toggle2FA = async (req, res) => {
+    try {
+        const { enable } = req.body;
+
+        const user = await User.findById(req.user._id);
+        user.twoFactorEnabled = enable;
+        await user.save();
+
+        res.json({
+            message: `Two-factor authentication ${enable ? 'enabled' : 'disabled'} successfully`,
+            twoFactorEnabled: user.twoFactorEnabled
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const requestPasswordChange = async (req, res) => {
+    try {
+        const { currentPassword } = req.body;
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const match = await bcrypt.compare(currentPassword, user.password);
+        if (!match) {
+            return res.status(400).json({ message: 'Current password is incorrect' });
+        }
+
+        const otp = generateOTP();
+        const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        user.passwordChangeOTP = otp;
+        user.passwordChangeOTPExpires = otpExpires;
+        await user.save();
+
+        await sendPasswordChangeEmail(user.email, otp, user.name);
+
+        res.json({ message: 'Verification code sent to your email' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const changePassword = async (req, res) => {
+    try {
+        const { otp, newPassword } = req.body;
+
+        if (!newPassword || newPassword.length < 6 || newPassword.length > 50) {
+            return res.status(400).json({ message: 'Password must be between 6 and 50 characters' });
+        }
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (!user.passwordChangeOTP || !user.passwordChangeOTPExpires) {
+            return res.status(400).json({ message: 'No verification code found. Please request again.' });
+        }
+
+        if (user.passwordChangeOTPExpires < Date.now()) {
+            return res.status(400).json({ message: 'Verification code expired. Please request again.' });
+        }
+
+        if (user.passwordChangeOTP !== otp) {
+            return res.status(400).json({ message: 'Invalid verification code' });
+        }
+
+        const hash = await bcrypt.hash(newPassword, 10);
+        user.password = hash;
+        user.passwordChangeOTP = undefined;
+        user.passwordChangeOTPExpires = undefined;
+        await user.save();
+
+        res.json({ message: 'Password changed successfully' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const requestUsernameChange = async (req, res) => {
+    try {
+        const { newUsername, password } = req.body;
+
+        if (!newUsername || !/^[a-zA-Z0-9_]{3,30}$/.test(newUsername)) {
+            return res.status(400).json({ message: 'Enter a valid username' });
+        }
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) {
+            return res.status(400).json({ message: 'Password is incorrect' });
+        }
+
+        const usernameExists = await User.findOne({ username: newUsername });
+        if (usernameExists) {
+            return res.status(400).json({ message: 'Username already taken' });
+        }
+
+        const otp = generateOTP();
+        const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+        user.usernameChangeOTP = otp;
+        user.usernameChangeOTPExpires = otpExpires;
+        user.pendingUsername = newUsername;
+        await user.save();
+
+        await sendUsernameChangeEmail(user.email, otp, user.name, newUsername);
+
+        res.json({ message: 'Verification code sent to your email' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const changeUsername = async (req, res) => {
+    try {
+        const { otp } = req.body;
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (!user.usernameChangeOTP || !user.usernameChangeOTPExpires) {
+            return res.status(400).json({ message: 'No verification code found. Please request again.' });
+        }
+
+        if (user.usernameChangeOTPExpires < Date.now()) {
+            return res.status(400).json({ message: 'Verification code expired. Please request again.' });
+        }
+
+        if (user.usernameChangeOTP !== otp) {
+            return res.status(400).json({ message: 'Invalid verification code' });
+        }
+
+        if (!user.pendingUsername) {
+            return res.status(400).json({ message: 'No pending username change' });
+        }
+
+        user.username = user.pendingUsername;
+        user.usernameChangeOTP = undefined;
+        user.usernameChangeOTPExpires = undefined;
+        user.pendingUsername = undefined;
+        await user.save();
+
+        // Generate new token with updated username
+        const token = jwt.sign(
+            { _id: user._id, username: user.username },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        res.json({
+            message: 'Username changed successfully',
+            token,
+            username: user.username
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const updateProfile = async (req, res) => {
+    try {
+        const { name, profilePicture } = req.body;
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (name) user.name = name;
+        if (profilePicture) user.profilePicture = profilePicture;
+
+        await user.save();
+
+        const userResponse = user.toObject();
+        delete userResponse.password;
+
+        res.json({
+            message: 'Profile updated successfully',
+            user: userResponse
+        });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 };
 
 export const verify = async (req, res) => {
-    const user = await User.findById(req.user._id).select('-password');
-    res.json(user);
+    try {
+        const user = await User.findById(req.user._id).select('-password -twoFactorOTP -twoFactorOTPExpires -passwordChangeOTP -passwordChangeOTPExpires -usernameChangeOTP -usernameChangeOTPExpires');
+        res.json(user);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 };
 
 export const logout = async (req, res) => {
-    await User.findByIdAndUpdate(req.user._id, { online: false });
-    res.json({ message: 'Logged out' });
+    try {
+        await User.findByIdAndUpdate(req.user._id, { online: false });
+        res.json({ message: 'Logged out successfully' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 };
