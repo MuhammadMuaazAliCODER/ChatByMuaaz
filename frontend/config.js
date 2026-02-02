@@ -1,6 +1,6 @@
 // API Configuration
-const API_URL = 'http://localhost:5500/api';
-const WS_URL = 'ws://localhost:5500';
+const API_URL = 'http://localhost:5300/api';
+const WS_URL = 'ws://localhost:5300';
 
 // Local Storage Keys
 const TOKEN_KEY = 'chatapp_token';

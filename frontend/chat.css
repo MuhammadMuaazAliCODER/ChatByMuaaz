@@ -2,11 +2,12 @@
 .chat-container {
     display: flex;
     height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile keyboards */
     overflow: hidden;
     position: relative;
 }
 
-/* Hamburger Menu */
+/* Hamburger Menu - NOW ON RIGHT SIDE */
 .hamburger {
     display: none;
     flex-direction: column;
@@ -55,7 +56,7 @@
     display: block;
 }
 
-/* Sidebar */
+/* Sidebar - NOW SLIDES FROM RIGHT */
 .sidebar {
     width: 360px;
     background: var(--bg-primary);
@@ -275,6 +276,8 @@
     flex-direction: column;
     background: var(--bg-secondary);
     position: relative;
+    min-height: 100vh;
+    min-height: 100dvh; /* Better mobile support */
 }
 
 .welcome-screen {
@@ -332,6 +335,7 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
 }
 
 .chat-header {
@@ -364,9 +368,13 @@
 .messages-container {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 20px;
     display: flex;
     flex-direction: column;
+    /* Fix for mobile keyboard */
+    max-height: calc(100vh - 140px);
+    max-height: calc(100dvh - 140px);
 }
 
 .messages {
@@ -381,6 +389,7 @@
     gap: 10px;
     max-width: 70%;
     animation: fadeIn 0.3s ease;
+    position: relative;
 }
 
 .message.sent {
@@ -410,6 +419,36 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    position: relative;
+}
+
+/* Reply Preview in Message */
+.reply-preview {
+    background: rgba(0, 0, 0, 0.1);
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.message.sent .reply-preview {
+    background: rgba(255, 255, 255, 0.15);
+    border-left-color: rgba(255, 255, 255, 0.5);
+}
+
+.reply-preview-name {
+    font-weight: 600;
+    margin-bottom: 2px;
+    font-size: 12px;
+}
+
+.reply-preview-text {
+    opacity: 0.8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .message-bubble {
@@ -448,19 +487,36 @@
     text-align: left;
 }
 
-/* Voice Message */
-/* .voice-message {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-} */
+/* Message Actions (Reply, etc.) */
+.message-actions {
+    position: absolute;
+    top: -8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px;
+    display: none;
+    gap: 2px;
+    box-shadow: 0 2px 8px var(--shadow-md);
+}
 
-/* .voice-play-btn {
-    background: rgba(255, 255, 255, 0.2);
+.message.sent .message-actions {
+    left: -40px;
+}
+
+.message.received .message-actions {
+    right: -40px;
+}
+
+.message:hover .message-actions {
+    display: flex;
+}
+
+.message-action-btn {
+    background: transparent;
     border: none;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
@@ -468,36 +524,39 @@
     justify-content: center;
     font-size: 16px;
     transition: background 0.2s;
-} */
+    color: var(--text-secondary);
+}
+
+.message-action-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+/* Professional Voice Message UI */
 .voice-message {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 5px;
-}
-
-.voice-waveform {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    height: 30px;
-    width: 120px;
-}
-
-.voice-bar {
-    width: 3px;
-    background-color: #ccc; /* Default color */
-    border-radius: 2px;
-    transition: background-color 0.2s ease;
-    opacity: 0.5;
+    gap: 12px;
+    padding: 4px;
+    min-width: 200px;
 }
 
 .voice-play-btn {
-    background: none;
+    background: rgba(0, 0, 0, 0.1);
     border: none;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    border-radius: 50%;
     cursor: pointer;
-    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.2s;
+    color: inherit;
 }
+
 .message.sent .voice-play-btn {
     background: rgba(255, 255, 255, 0.2);
     color: white;
@@ -509,24 +568,105 @@
 }
 
 .voice-play-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
 }
-/* 
-.voice-waveform {
+
+.voice-play-btn:active {
+    transform: scale(0.95);
+}
+
+.voice-content {
     flex: 1;
-    height: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.voice-waveform {
     display: flex;
     align-items: center;
-    gap: 2px;
-} */
+    gap: 3px;
+    height: 32px;
+}
 
-/* .voice-bar {
+.voice-bar {
     width: 3px;
-    height: 100%;
     background: currentColor;
-    opacity: 0.5;
     border-radius: 2px;
-} */
+    transition: all 0.2s ease;
+    opacity: 0.4;
+}
+
+.message.sent .voice-bar {
+    background: white;
+}
+
+.message.received .voice-bar {
+    background: var(--accent);
+}
+
+.voice-bar.active {
+    opacity: 1;
+}
+
+.voice-duration {
+    font-size: 12px;
+    opacity: 0.7;
+    font-weight: 500;
+}
+
+/* Reply Input Bar */
+.reply-bar {
+    display: none;
+    background: var(--bg-tertiary);
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    gap: 12px;
+}
+
+.reply-bar.active {
+    display: flex;
+}
+
+.reply-bar-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.reply-bar-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 2px;
+}
+
+.reply-bar-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.reply-bar-close {
+    background: transparent;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+
+.reply-bar-close:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
 
 /* Chat Input */
 .chat-input {
@@ -686,12 +826,12 @@
 }
 
 @media (max-width: 768px) {
-    /* Show hamburger menu */
+    /* Show hamburger menu ON RIGHT SIDE */
     .hamburger {
         display: flex;
         position: fixed;
         top: 16px;
-        left: 16px;
+        right: 16px; /* Changed from left to right */
         z-index: 101;
         background: var(--bg-primary);
         border: 1px solid var(--border);
@@ -700,17 +840,20 @@
         box-shadow: 0 2px 8px var(--shadow-md);
     }
 
-    /* Sidebar becomes full screen overlay */
+    /* Sidebar slides FROM RIGHT TO LEFT */
     .sidebar {
         position: fixed;
-        left: 0;
+        right: 0; /* Changed from left to right */
+        left: auto;
         top: 0;
         bottom: 0;
         width: 85%;
         max-width: 320px;
         z-index: 100;
-        transform: translateX(-100%);
-        box-shadow: 4px 0 12px var(--shadow-lg);
+        transform: translateX(100%); /* Changed from -100% to 100% */
+        box-shadow: -4px 0 12px var(--shadow-lg); /* Shadow on left side */
+        border-right: none;
+        border-left: 1px solid var(--border);
     }
 
     .sidebar.active {
@@ -722,13 +865,19 @@
         width: 100%;
     }
 
-    /* Adjust chat header for hamburger */
+    /* Adjust chat header for hamburger on right */
     .chat-header {
-        padding-left: 60px;
+        padding-right: 60px; /* Changed from padding-left */
     }
 
     .chat-header-left {
         flex: 1;
+    }
+
+    /* Better mobile keyboard handling */
+    .messages-container {
+        max-height: calc(100dvh - 140px);
+        padding: 16px 12px;
     }
 
     /* Increase message width on mobile */
@@ -743,6 +892,17 @@
 
     .message-text {
         font-size: 14px;
+    }
+
+    /* Hide message actions on mobile for cleaner UI */
+    .message-actions {
+        display: none !important;
+    }
+
+    /* Add long press hint for mobile */
+    .message {
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
     }
 
     /* Adjust welcome screen */
@@ -807,11 +967,6 @@
         padding: 6px;
     }
 
-    /* Messages container padding */
-    .messages-container {
-        padding: 16px 12px;
-    }
-
     /* Sidebar search box */
     .search-box {
         padding: 12px 16px;
@@ -840,6 +995,32 @@
         font-size: 14px;
         padding: 12px;
     }
+
+    /* Reply bar mobile */
+    .reply-bar {
+        padding: 8px 12px;
+    }
+
+    /* Voice message mobile */
+    .voice-message {
+        min-width: 180px;
+    }
+
+    .voice-play-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        font-size: 16px;
+    }
+
+    .voice-waveform {
+        height: 28px;
+        gap: 2px;
+    }
+
+    .voice-bar {
+        width: 2.5px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -850,12 +1031,12 @@
 
     .hamburger {
         top: 12px;
-        left: 12px;
+        right: 12px; /* Keep on right */
         padding: 8px;
     }
 
     .chat-header {
-        padding: 12px 16px 12px 56px;
+        padding: 12px 56px 12px 16px; /* Padding on right for hamburger */
     }
 
     .chat-header h3 {
@@ -885,6 +1066,7 @@
 
     .messages-container {
         padding: 12px 8px;
+        max-height: calc(100dvh - 130px);
     }
 
     .avatar {
@@ -903,6 +1085,29 @@
 
     .feature span:last-child {
         font-size: 13px;
+    }
+
+    .voice-message {
+        min-width: 160px;
+    }
+
+    .voice-play-btn {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        font-size: 14px;
+    }
+
+    .voice-waveform {
+        height: 24px;
+    }
+
+    .voice-bar {
+        width: 2px;
+    }
+
+    .voice-duration {
+        font-size: 11px;
     }
 }
 
@@ -941,18 +1146,58 @@
     scroll-behavior: smooth;
 }
 
-/* Hide scrollbar for cleaner look on mobile */
+/* Better scrollbar styling */
+.messages-container::-webkit-scrollbar,
+.chats-list::-webkit-scrollbar,
+.friends-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.messages-container::-webkit-scrollbar-track,
+.chats-list::-webkit-scrollbar-track,
+.friends-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.messages-container::-webkit-scrollbar-thumb,
+.chats-list::-webkit-scrollbar-thumb,
+.friends-list::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+.messages-container::-webkit-scrollbar-thumb:hover,
+.chats-list::-webkit-scrollbar-thumb:hover,
+.friends-list::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* Hide scrollbar on mobile for cleaner look */
 @media (max-width: 768px) {
     .messages-container::-webkit-scrollbar,
     .chats-list::-webkit-scrollbar,
     .friends-list::-webkit-scrollbar {
-        width: 4px;
+        width: 3px;
     }
+}
 
-    .messages-container::-webkit-scrollbar-thumb,
-    .chats-list::-webkit-scrollbar-thumb,
-    .friends-list::-webkit-scrollbar-thumb {
-        background: var(--border);
-        border-radius: 2px;
+/* Fix iOS input zoom issue */
+@media screen and (max-width: 768px) {
+    input[type="text"],
+    input[type="search"],
+    textarea {
+        font-size: 16px !important; /* Prevents iOS zoom on focus */
+    }
+}
+
+/* Fix mobile keyboard viewport */
+@supports (-webkit-touch-callout: none) {
+    /* iOS specific */
+    .chat-main {
+        height: -webkit-fill-available;
+    }
+    
+    #activeChat {
+        height: -webkit-fill-available;
     }
 }

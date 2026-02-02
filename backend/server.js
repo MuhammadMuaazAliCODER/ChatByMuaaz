@@ -15,6 +15,7 @@ import messageRoutes from './routes/message.routes.js';
 import userRoutes from './routes/user.routes.js';
 import friendRoutes  from './routes/friendRequest.route.js';
 import friend from './routes/friend.routes.js';
+import emailRoutes from "./routes/email.routes.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -46,6 +47,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/friend', friendRoutes);
 app.use('/api/friends', friend);
-
-const PORT = process.env.PORT || 8000;
+app.use("/api/email", emailRoutes);
+// const PORT = process.env.PORT || 8000;
+const PORT =  5300;
 server.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
