@@ -281,7 +281,8 @@ const getVerificationLinkTemplate = (verificationUrl, name) => {
 
 // Send email verification link
 export const sendVerificationEmail = async (email, token, name) => {
-    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const verificationUrl = `${frontendUrl}/pages/verify-email.html?token=${token}`;
     
     const mailOptions = {
         from: `"Chat By Muaaz" <${process.env.EMAIL_USER}>`,
