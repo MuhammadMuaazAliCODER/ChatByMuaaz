@@ -1,5 +1,6 @@
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
+import { sendPushNotification } from '../services/push.service.js';
 
 let clients = new Map(); // Map of userId -> ws connection
 let onlineUsers = new Set(); // Set of online user IDs
@@ -76,7 +77,7 @@ export const initSocket = (server) => {
     console.log('WebSocket server initialized');
 };
 
-// Handle messages from clients (typing indicators, etc.)
+// Handle messages from clients (typing indicators, message status, etc.)
 function handleClientMessage(userId, data) {
     switch (data.type) {
         case 'typing':
@@ -86,6 +87,34 @@ function handleClientMessage(userId, data) {
                 chatId: data.chatId,
                 userId: userId,
                 isTyping: data.isTyping
+            }, [userId]); // Exclude sender
+            break;
+
+        case 'message_delivered':
+            // Notify sender that message was delivered
+            sendToUser(data.senderId, {
+                type: 'message_delivered',
+                messageId: data.messageId,
+                deliveredAt: new Date().toISOString()
+            });
+            break;
+
+        case 'message_read':
+            // Notify sender that message was read
+            sendToUser(data.senderId, {
+                type: 'message_read',
+                messageId: data.messageId,
+                readAt: new Date().toISOString()
+            });
+            break;
+
+        case 'messages_read':
+            // Bulk read status for when user opens a chat
+            sendToUser(data.senderId, {
+                type: 'messages_read',
+                messageIds: data.messageIds,
+                chatId: data.chatId,
+                readAt: new Date().toISOString()
             });
             break;
 
@@ -94,11 +123,11 @@ function handleClientMessage(userId, data) {
     }
 }
 
-// Broadcast to all connected clients
-export const broadcast = (data) => {
+// Broadcast to all connected clients (with optional exclusion list)
+export const broadcast = (data, excludeUsers = []) => {
     const msg = JSON.stringify(data);
     clients.forEach((ws, userId) => {
-        if (ws.readyState === 1) { // WebSocket.OPEN
+        if (!excludeUsers.includes(userId) && ws.readyState === 1) {
             ws.send(msg);
         }
     });
@@ -112,6 +141,39 @@ export const sendToUser = (userId, data) => {
         return true;
     }
     return false;
+};
+
+// Send new message notification (with push notification if offline)
+export const sendMessageNotification = async (recipientId, messageData) => {
+    const isOnline = isUserOnline(recipientId);
+    
+    if (isOnline) {
+        // User is online, send via WebSocket
+        sendToUser(recipientId, {
+            type: 'new_message',
+            message: messageData,
+            playSound: true
+        });
+    } else {
+        // User is offline, send push notification
+        try {
+            await sendPushNotification(recipientId, {
+                title: messageData.senderName || 'New Message',
+                body: messageData.type === 'voice' 
+                    ? '🎤 Voice message' 
+                    : messageData.content,
+                icon: messageData.senderAvatar || '/default-avatar.png',
+                badge: '/badge-icon.png',
+                data: {
+                    chatId: messageData.chatId,
+                    messageId: messageData._id,
+                    url: `/chat/${messageData.chatId}`
+                }
+            });
+        } catch (error) {
+            console.error('Failed to send push notification:', error);
+        }
+    }
 };
 
 // Check if user is online
@@ -130,4 +192,9 @@ export const getUsersOnlineStatus = (userIds) => {
         userId: id,
         isOnline: onlineUsers.has(id)
     }));
+};
+
+// Get count of online users
+export const getOnlineUserCount = () => {
+    return onlineUsers.size;
 };
