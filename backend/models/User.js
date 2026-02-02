@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    emailVerificationToken: String,
+    emailVerificationOTP: String,
     emailVerificationExpires: Date,
     
     // Two-Factor Authentication

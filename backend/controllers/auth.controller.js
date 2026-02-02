@@ -44,26 +44,27 @@ export const register = async (req, res) => {
 
         const hash = await bcrypt.hash(password, 10);
         
-        // Generate email verification token
-        const verificationToken = generateToken();
-        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        // Generate email verification OTP
+        const verificationOTP = generateOTP();
+        const verificationExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
         const user = await User.create({
             name,
             username,
             email,
             password: hash,
-            emailVerificationToken: verificationToken,
+            emailVerificationOTP: verificationOTP,
             emailVerificationExpires: verificationExpires,
             isEmailVerified: false
         });
 
-        // Send verification email
-        await sendVerificationEmail(email, verificationToken, name);
+        // Send verification email with OTP
+        await sendVerificationEmail(email, verificationOTP, name);
 
         res.status(201).json({
-            message: 'Registration successful! Please check your email to verify your account.',
-            email: email
+            message: 'Registration successful! Please check your email for verification code.',
+            email: email,
+            tempUserId: user._id
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -72,19 +73,20 @@ export const register = async (req, res) => {
 
 export const verifyEmail = async (req, res) => {
     try {
-        const { token } = req.params;
+        const { email, otp } = req.body;
 
         const user = await User.findOne({
-            emailVerificationToken: token,
+            email,
+            emailVerificationOTP: otp,
             emailVerificationExpires: { $gt: Date.now() }
         });
 
         if (!user) {
-            return res.status(400).json({ message: 'Invalid or expired verification token' });
+            return res.status(400).json({ message: 'Invalid or expired verification code' });
         }
 
         user.isEmailVerified = true;
-        user.emailVerificationToken = undefined;
+        user.emailVerificationOTP = undefined;
         user.emailVerificationExpires = undefined;
         await user.save();
 
@@ -107,16 +109,16 @@ export const resendVerificationEmail = async (req, res) => {
             return res.status(400).json({ message: 'Email already verified' });
         }
 
-        const verificationToken = generateToken();
-        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const verificationOTP = generateOTP();
+        const verificationExpires = new Date(Date.now() + 10 * 60 * 1000);
 
-        user.emailVerificationToken = verificationToken;
+        user.emailVerificationOTP = verificationOTP;
         user.emailVerificationExpires = verificationExpires;
         await user.save();
 
-        await sendVerificationEmail(email, verificationToken, user.name);
+        await sendVerificationEmail(email, verificationOTP, user.name);
 
-        res.json({ message: 'Verification email sent successfully' });
+        res.json({ message: 'Verification code sent successfully' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

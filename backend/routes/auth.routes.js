@@ -14,13 +14,13 @@ import {
     verify,
     logout
 } from '../controllers/auth.controller.js';
-import authenticate from '../middleware/auth.middleware.js'
+import  authenticate  from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
 // Registration & Email Verification
 router.post('/register', register);
-router.get('/verify-email/:token', verifyEmail);
+router.post('/verify-email', verifyEmail);
 router.post('/resend-verification', resendVerificationEmail);
 
 // Login & 2FA
