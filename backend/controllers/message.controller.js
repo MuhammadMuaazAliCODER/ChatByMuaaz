@@ -1,156 +1,311 @@
 import Message from '../models/Message.js';
 import Chat from '../models/Chat.js';
-import { broadcast, sendToUser } from '../websocket/socket.js';
-import dotenv from 'dotenv';
-dotenv.config();
-import fs from 'fs';
-import cloudinary from "../config/cloudinary.js";
+import { sendMessageNotification, sendToUser } from '../websocket/socket.js';
 
+// Send a new message
+export const sendMessage = async (req, res) => {
+    try {
+        const { chatId, content, type = 'text', audioUrl } = req.body;
+        const senderId = req.user._id;
+
+        // Verify chat exists and user is a participant
+        const chat = await Chat.findById(chatId).populate('participants', 'name username profilePicture');
+        
+        if (!chat) {
+            return res.status(404).json({
+                success: false,
+                message: 'Chat not found'
+            });
+        }
+
+        const isParticipant = chat.participants.some(
+            p => p._id.toString() === senderId.toString()
+        );
+
+        if (!isParticipant) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not a participant of this chat'
+            });
+        }
+
+        // Create message
+        const message = new Message({
+            chat: chatId,
+            sender: senderId,
+            content,
+            type,
+            audioUrl,
+            status: 'sent'
+        });
+
+        await message.save();
+        await message.populate('sender', 'name username profilePicture');
+
+        // Update chat's last message
+        chat.lastMessage = message._id;
+        chat.updatedAt = new Date();
+        await chat.save();
+
+        // Get recipient (other participant)
+        const recipient = chat.participants.find(
+            p => p._id.toString() !== senderId.toString()
+        );
+
+        if (recipient) {
+            // Send notification to recipient
+            await sendMessageNotification(recipient._id.toString(), {
+                _id: message._id,
+                chatId: chatId,
+                content: message.content,
+                type: message.type,
+                senderName: req.user.name,
+                senderAvatar: req.user.profilePicture,
+                createdAt: message.createdAt
+            });
+        }
+
+        res.status(201).json({
+            success: true,
+            message: message
+        });
+    } catch (error) {
+        console.error('Error sending message:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to send message'
+        });
+    }
+};
+
+// Mark message as delivered
+export const markAsDelivered = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user._id;
+
+        const message = await Message.findById(messageId).populate('sender');
+
+        if (!message) {
+            return res.status(404).json({
+                success: false,
+                message: 'Message not found'
+            });
+        }
+
+        // Only recipient can mark as delivered
+        if (message.sender._id.toString() === userId.toString()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot mark your own message as delivered'
+            });
+        }
+
+        // Update status if not already delivered or read
+        if (message.status === 'sent') {
+            message.status = 'delivered';
+            message.deliveredAt = new Date();
+            await message.save();
+
+            // Notify sender via WebSocket
+            sendToUser(message.sender._id.toString(), {
+                type: 'message_delivered',
+                messageId: message._id,
+                deliveredAt: message.deliveredAt
+            });
+        }
+
+        res.json({
+            success: true,
+            message: message
+        });
+    } catch (error) {
+        console.error('Error marking message as delivered:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to mark message as delivered'
+        });
+    }
+};
+
+// Mark message as read
+export const markAsRead = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user._id;
+
+        const message = await Message.findById(messageId).populate('sender');
+
+        if (!message) {
+            return res.status(404).json({
+                success: false,
+                message: 'Message not found'
+            });
+        }
+
+        // Only recipient can mark as read
+        if (message.sender._id.toString() === userId.toString()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot mark your own message as read'
+            });
+        }
+
+        // Update status if not already read
+        if (message.status !== 'read') {
+            message.status = 'read';
+            message.readAt = new Date();
+            message.read = true; // For backward compatibility
+            
+            if (!message.deliveredAt) {
+                message.deliveredAt = message.readAt;
+            }
+            
+            await message.save();
+
+            // Notify sender via WebSocket
+            sendToUser(message.sender._id.toString(), {
+                type: 'message_read',
+                messageId: message._id,
+                readAt: message.readAt
+            });
+        }
+
+        res.json({
+            success: true,
+            message: message
+        });
+    } catch (error) {
+        console.error('Error marking message as read:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to mark message as read'
+        });
+    }
+};
+
+// Mark all messages in a chat as read
+export const markChatAsRead = async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const userId = req.user._id;
+
+        // Get all unread messages in this chat that user didn't send
+        const messages = await Message.find({
+            chat: chatId,
+            sender: { $ne: userId },
+            status: { $in: ['sent', 'delivered'] }
+        }).populate('sender');
+
+        if (messages.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No unread messages'
+            });
+        }
+
+        const now = new Date();
+        const messageIds = [];
+
+        // Update all messages
+        for (const message of messages) {
+            message.status = 'read';
+            message.readAt = now;
+            message.read = true;
+            
+            if (!message.deliveredAt) {
+                message.deliveredAt = now;
+            }
+            
+            await message.save();
+            messageIds.push(message._id);
+
+            // Notify sender
+            sendToUser(message.sender._id.toString(), {
+                type: 'message_read',
+                messageId: message._id,
+                readAt: now
+            });
+        }
+
+        res.json({
+            success: true,
+            count: messages.length,
+            messageIds
+        });
+    } catch (error) {
+        console.error('Error marking chat as read:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to mark chat as read'
+        });
+    }
+};
+
+// Get messages for a chat
 export const getMessages = async (req, res) => {
     try {
-        const messages = await Message.find({ chat: req.params.chatId })
-            .populate('sender', 'name username verified')
-            .sort({ createdAt: 1 });
-        
-        res.json({ messages }); 
+        const { chatId } = req.params;
+        const { page = 1, limit = 50 } = req.query;
+
+        const messages = await Message.find({ chat: chatId })
+            .populate('sender', 'name username profilePicture')
+            .sort({ createdAt: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit)
+            .exec();
+
+        const count = await Message.countDocuments({ chat: chatId });
+
+        res.json({
+            success: true,
+            messages: messages.reverse(), // Reverse to show oldest first
+            totalPages: Math.ceil(count / limit),
+            currentPage: page
+        });
     } catch (error) {
         console.error('Error getting messages:', error);
-        res.status(500).json({ error: 'Failed to get messages' });
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get messages'
+        });
     }
 };
 
-export const sendText = async (req, res) => {
+// Delete a message
+export const deleteMessage = async (req, res) => {
     try {
-        const { chatId, content } = req.body;
-        
-        if (!content || !content.trim()) {
-            return res.status(400).json({ error: 'Message content is required' });
-        }
+        const { messageId } = req.params;
+        const userId = req.user._id;
 
-        // Create message
-        const msg = await Message.create({
-            chat: chatId,
-            sender: req.user._id,
-            content: content.trim()
-        });
+        const message = await Message.findById(messageId);
 
-        // Update chat
-        await Chat.findByIdAndUpdate(chatId, {
-            lastMessage: content.trim(),
-            lastMessageTime: new Date(),
-            lastMessageRef: msg._id
-        });
-
-        // Populate message with sender info
-        const populatedMsg = await Message.findById(msg._id)
-            .populate('sender', 'name username verified');
-
-        // Get chat to find participants
-        const chat = await Chat.findById(chatId).populate('participants', '_id');
-        
-        if (chat) {
-            // Send to each participant except the sender
-            chat.participants.forEach(participant => {
-                if (participant._id.toString() !== req.user._id.toString()) {
-                    sendToUser(participant._id.toString(), {
-                        type: 'new_message',
-                        message: {
-                            _id: populatedMsg._id,
-                            chat: chatId,
-                            sender: {
-                                _id: populatedMsg.sender._id,
-                                name: populatedMsg.sender.name,
-                                username: populatedMsg.sender.username,
-                                verified: populatedMsg.sender.verified
-                            },
-                            content: populatedMsg.content,
-                            type: 'text',
-                            createdAt: populatedMsg.createdAt
-                        }
-                    });
-                }
+        if (!message) {
+            return res.status(404).json({
+                success: false,
+                message: 'Message not found'
             });
         }
 
-        res.status(201).json({ message: populatedMsg });
-    } catch (error) {
-        console.error('Error sending text message:', error);
-        res.status(500).json({ error: 'Failed to send message' });
-    }
-};
-
-export const sendVoice = async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'Audio file is required' });
-        }
-
-        // Upload to cloudinary
-        const result = await cloudinary.uploader.upload(req.file.path, {
-            resource_type: 'video', 
-            folder: 'chat_voices'
-        });
-
-        const audioUrl = result.secure_url;
-
-        // Create message
-        const msg = await Message.create({
-            chat: req.body.chatId,
-            sender: req.user._id,
-            type: 'voice',
-            audioUrl
-        });
-
-        // Update chat
-        await Chat.findByIdAndUpdate(req.body.chatId, {
-            lastMessage: '🎤 Voice message',
-            lastMessageTime: new Date(),
-            lastMessageRef: msg._id
-        });
-
-        // Populate message
-        const populatedMsg = await Message.findById(msg._id)
-            .populate('sender', 'name username verified');
-
-        // Get chat to find participants
-        const chat = await Chat.findById(req.body.chatId).populate('participants', '_id');
-        
-        if (chat) {
-            // Send to each participant except the sender
-            chat.participants.forEach(participant => {
-                if (participant._id.toString() !== req.user._id.toString()) {
-                    sendToUser(participant._id.toString(), {
-                        type: 'new_message',
-                        message: {
-                            _id: populatedMsg._id,
-                            chat: req.body.chatId,
-                            sender: {
-                                _id: populatedMsg.sender._id,
-                                name: populatedMsg.sender.name,
-                                username: populatedMsg.sender.username,
-                                verified: populatedMsg.sender.verified
-                            },
-                            type: 'voice',
-                            audioUrl: populatedMsg.audioUrl,
-                            createdAt: populatedMsg.createdAt
-                        }
-                    });
-                }
+        // Only sender can delete their message
+        if (message.sender.toString() !== userId.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only delete your own messages'
             });
         }
 
-        res.status(201).json({ message: populatedMsg });
+        await message.deleteOne();
 
-        // Delete local file after upload
-        fs.unlinkSync(req.file.path);
+        res.json({
+            success: true,
+            message: 'Message deleted successfully'
+        });
     } catch (error) {
-        console.error('Error sending voice message:', error);
-        
-        // Clean up file if it exists
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-        
-        res.status(500).json({ error: 'Failed to send voice message' });
+        console.error('Error deleting message:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete message'
+        });
     }
 };
