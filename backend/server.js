@@ -13,13 +13,22 @@ import authRoutes from './routes/auth.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import messageRoutes from './routes/message.routes.js';
 import userRoutes from './routes/user.routes.js';
-import friendRoutes  from './routes/friendRequest.route.js';
+import friendRoutes from './routes/friendRequest.route.js';
 import friend from './routes/friend.routes.js';
 import emailRoutes from "./routes/email.routes.js";
+
+// 🔥 Import Stripe subscription routes
+import subscriptionRoutes from './routes/subscription.routes.js';
 
 const app = express();
 const server = http.createServer(app);
 
+// ⚠️ CRITICAL: Webhook route MUST be registered BEFORE express.json()
+// Stripe webhooks require raw body for signature verification
+app.use('/api/subscription/webhook', 
+  express.raw({ type: 'application/json' }), 
+  subscriptionRoutes
+);
 
 // Fixed: Configure CORS only once
 app.use(cors({
@@ -34,6 +43,7 @@ app.options('*', cors());
 
 // Fixed: JSON middleware only once
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
 
 // Connect to database and initialize WebSocket
@@ -48,6 +58,42 @@ app.use('/api/users', userRoutes);
 app.use('/api/friend', friendRoutes);
 app.use('/api/friends', friend);
 app.use("/api/email", emailRoutes);
-// const PORT = process.env.PORT || 8000;
-const PORT =  5300;
-server.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
+
+// 🔥 Stripe Subscription Routes (other than webhook)
+app.use('/api/subscription', subscriptionRoutes);
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Server is running',
+    stripe: 'Integrated' 
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err.stack);
+  res.status(500).json({
+    success: false,
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// Handle 404
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found'
+  });
+});
+
+const PORT = 5300;
+
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`💳 Stripe webhook: http://localhost:${PORT}/api/subscription/webhook`);
+});
+
+export default app;
