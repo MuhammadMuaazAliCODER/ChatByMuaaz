@@ -1,5 +1,7 @@
 import { stripe, SUBSCRIPTION_PLANS } from '../config/stripe.js';
 import User from '../models/User.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 class SubscriptionController {
 
@@ -27,7 +29,7 @@ class SubscriptionController {
   async createCheckoutSession(req, res) {
     try {
       const { planType } = req.body;
-      const userId = req.user.id;
+      const userId = req.user._id;
 
       if (!SUBSCRIPTION_PLANS[planType]) {
         return res.status(400).json({
@@ -68,8 +70,8 @@ class SubscriptionController {
             quantity: 1
           }
         ],
-        success_url: `${process.env.FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.FRONTEND_URL}/subscription/cancel`,
+        success_url: "http://localhost:3000/subscription/success?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url: "http://localhost:3000/subscription/cancel",
         metadata: {
           userId: user._id.toString(),
           planType
@@ -97,8 +99,8 @@ class SubscriptionController {
   // ===============================
   async getSubscriptionStatus(req, res) {
     try {
-      const user = await User.findById(req.user.id)
-        .select('subscriptionStatus subscriptionPlan subscriptionEndDate subscriptionId stripeCustomerId');
+      const user = await User.findById(req.user._id)
+        .select('subscription stripeCustomerId');
 
       if (!user) {
         return res.status(404).json({
@@ -107,29 +109,13 @@ class SubscriptionController {
         });
       }
 
-      let subscriptionDetails = null;
-
-      if (user.subscriptionId) {
-        try {
-          const subscription = await stripe.subscriptions.retrieve(user.subscriptionId);
-
-          subscriptionDetails = {
-            status: subscription.status,
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-            cancelAtPeriodEnd: subscription.cancel_at_period_end
-          };
-        } catch (err) {
-          console.error('Stripe fetch error:', err.message);
-        }
-      }
-
       return res.json({
         success: true,
         subscription: {
-          status: user.subscriptionStatus || 'none',
-          plan: user.subscriptionPlan || 'free',
-          endDate: user.subscriptionEndDate,
-          details: subscriptionDetails
+          status: user.subscription?.status || 'none',
+          plan: user.subscription?.plan || 'free',
+          endDate: user.subscription?.currentPeriodEnd || null,
+          cancelAtPeriodEnd: user.subscription?.cancelAtPeriodEnd || false
         }
       });
 
@@ -147,9 +133,9 @@ class SubscriptionController {
   // ===============================
   async cancelSubscription(req, res) {
     try {
-      const user = await User.findById(req.user.id);
+      const user = await User.findById(req.user._id);
 
-      if (!user?.subscriptionId) {
+      if (!user?.subscription?.subscriptionId) {
         return res.status(400).json({
           success: false,
           message: 'No active subscription found'
@@ -157,9 +143,12 @@ class SubscriptionController {
       }
 
       const subscription = await stripe.subscriptions.update(
-        user.subscriptionId,
+        user.subscription.subscriptionId,
         { cancel_at_period_end: true }
       );
+
+      user.subscription.cancelAtPeriodEnd = true;
+      await user.save();
 
       return res.json({
         success: true,
@@ -181,9 +170,9 @@ class SubscriptionController {
   // ===============================
   async resumeSubscription(req, res) {
     try {
-      const user = await User.findById(req.user.id);
+      const user = await User.findById(req.user._id);
 
-      if (!user?.subscriptionId) {
+      if (!user?.subscription?.subscriptionId) {
         return res.status(400).json({
           success: false,
           message: 'No subscription found'
@@ -191,9 +180,13 @@ class SubscriptionController {
       }
 
       const subscription = await stripe.subscriptions.update(
-        user.subscriptionId,
+        user.subscription.subscriptionId,
         { cancel_at_period_end: false }
       );
+
+      user.subscription.cancelAtPeriodEnd = false;
+      user.subscription.status = subscription.status;
+      await user.save();
 
       return res.json({
         success: true,
@@ -224,19 +217,21 @@ class SubscriptionController {
         });
       }
 
-      const user = await User.findById(req.user.id);
+      const user = await User.findById(req.user._id);
 
-      if (!user?.subscriptionId) {
+      if (!user?.subscription?.subscriptionId) {
         return res.status(400).json({
           success: false,
           message: 'No active subscription'
         });
       }
 
-      const subscription = await stripe.subscriptions.retrieve(user.subscriptionId);
+      const subscription = await stripe.subscriptions.retrieve(
+        user.subscription.subscriptionId
+      );
 
       const updated = await stripe.subscriptions.update(
-        user.subscriptionId,
+        user.subscription.subscriptionId,
         {
           items: [{
             id: subscription.items.data[0].id,
@@ -246,7 +241,8 @@ class SubscriptionController {
         }
       );
 
-      user.subscriptionPlan = planType;
+      user.subscription.plan = planType;
+      user.subscription.currentPeriodEnd = new Date(updated.current_period_end * 1000);
       await user.save();
 
       return res.json({
@@ -269,7 +265,7 @@ class SubscriptionController {
   // ===============================
   async createPortalSession(req, res) {
     try {
-      const user = await User.findById(req.user.id);
+      const user = await User.findById(req.user._id);
 
       if (!user?.stripeCustomerId) {
         return res.status(400).json({

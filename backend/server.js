@@ -16,7 +16,7 @@ import userRoutes from './routes/user.routes.js';
 import friendRoutes from './routes/friendRequest.route.js';
 import friend from './routes/friend.routes.js';
 import emailRoutes from "./routes/email.routes.js";
-
+import pushroutes from "./routes/push.routes.js"
 // 🔥 Import Stripe subscription routes
 import subscriptionRoutes from './routes/subscription.routes.js';
 
@@ -58,8 +58,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/friend', friendRoutes);
 app.use('/api/friends', friend);
 app.use("/api/email", emailRoutes);
+app.use("api/push",pushroutes)
 
-// 🔥 Stripe Subscription Routes (other than webhook)
 app.use('/api/subscription', subscriptionRoutes);
 
 // Health check endpoint

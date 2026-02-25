@@ -7,6 +7,12 @@ export const stripe = Stripe(process.env.STRIPE_SECRECT_KEY);
 
 // Define your subscription plans
 export const SUBSCRIPTION_PLANS = {
+  free:{
+     name: 'Free Plan',
+    priceId: null,
+    price: 0.00,
+    features: ['50 messages/day', 'Basic support', '5 Friends']
+  },
   basic: {
     name: 'Basic Plan',
     priceId: process.env.STRIPE_BASIC_PRICE_ID,

@@ -3,10 +3,9 @@ import subscriptionController from '../controllers/subscription.controller.js';
 import webhookController from '../controllers/webhook.controller.js';
 import authenticateUser from '../middleware/auth.middleware.js';
 
-
 const router = express.Router();
 
-// Public routes
+// Public route
 router.get('/plans', subscriptionController.getPlans);
 
 // Stripe Webhook (RAW BODY)
