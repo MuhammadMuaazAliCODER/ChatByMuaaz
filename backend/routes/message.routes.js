@@ -1,5 +1,6 @@
 import express from 'express';
-import authenticateToken  from '../middleware/auth.middleware.js';
+import authenticateToken from '../middleware/auth.middleware.js';
+import { checkMessageLimit } from '../middleware/checkMessageLimit.js';
 import {
     sendMessage,
     getMessages,
@@ -7,12 +8,12 @@ import {
     markAsRead,
     markChatAsRead,
     deleteMessage
-} from '../controllers/message.controller.js'
+} from '../controllers/message.controller.js';
 
 const router = express.Router();
 
-// Send a message
-router.post('/', authenticateToken, sendMessage);
+// Send a message — checkMessageLimit blocks if monthly quota is exceeded
+router.post('/', authenticateToken, checkMessageLimit, sendMessage);
 
 // Get messages for a chat
 router.get('/:chatId', authenticateToken, getMessages);
