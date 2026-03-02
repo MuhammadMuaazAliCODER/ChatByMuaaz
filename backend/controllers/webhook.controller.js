@@ -10,29 +10,23 @@ class WebhookController {
     const sig = req.headers['stripe-signature'];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-    // ── Debug: confirm raw body is arriving correctly ────────────────────────
     console.log('\n📦 Stripe webhook hit');
-    console.log('   Body type    :', Buffer.isBuffer(req.body) ? `✅ Buffer (${req.body.length} bytes)` : `❌ ${typeof req.body} — raw body was lost!`);
-    console.log('   Signature    :', sig ? '✅ present' : '❌ MISSING');
-    console.log('   Secret set   :', webhookSecret ? '✅ yes' : '❌ STRIPE_WEBHOOK_SECRET missing in .env');
+    console.log('Body Buffer:', Buffer.isBuffer(req.body));
 
     if (!Buffer.isBuffer(req.body)) {
-      console.error('❌ FATAL: req.body is not a Buffer.');
-      console.error('   Fix: Make sure in app.js the line:');
-      console.error('     app.use("/webhook", webhookRoutes)');
-      console.error('   comes BEFORE:');
-      console.error('     app.use(express.json())');
-      return res.status(400).send('Webhook Error: Raw body not received. Check middleware order in app.js.');
+      return res.status(400).send('Raw body not received.');
     }
 
     let event;
+
     try {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        webhookSecret
+      );
     } catch (err) {
       console.error('❌ Signature verification failed:', err.message);
-      console.error('   Make sure STRIPE_WEBHOOK_SECRET in .env matches:');
-      console.error('   • Local dev  → the whsec_ printed by "stripe listen --forward-to ..."');
-      console.error('   • Production → Stripe Dashboard → Webhooks → your endpoint → Signing secret');
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
@@ -43,142 +37,194 @@ class WebhookController {
         case 'checkout.session.completed':
           await this.handleCheckoutCompleted(event.data.object);
           break;
+
         case 'customer.subscription.created':
           await this.handleSubscriptionCreated(event.data.object);
           break;
+
         case 'customer.subscription.updated':
           await this.handleSubscriptionUpdated(event.data.object);
           break;
+
         case 'customer.subscription.deleted':
           await this.handleSubscriptionDeleted(event.data.object);
           break;
+
         case 'invoice.payment_succeeded':
           await this.handlePaymentSucceeded(event.data.object);
           break;
+
         case 'invoice.payment_failed':
           await this.handlePaymentFailed(event.data.object);
           break;
+
         default:
-          console.log(`ℹ️  Unhandled event type: ${event.type}`);
+          console.log(`ℹ️ Unhandled event type: ${event.type}`);
       }
 
-      return res.json({ received: true });
+      res.json({ received: true });
+
     } catch (error) {
-      console.error('❌ Webhook handler error:', error.message, error.stack);
-      return res.status(500).json({ error: 'Webhook handler failed' });
+      console.error('❌ Webhook handler error:', error);
+      res.status(500).json({ error: 'Webhook handler failed' });
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // checkout.session.completed
-  // Main activation: sets plan, role, subscriptionId in DB
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // SAFE DATE HELPER (PREVENTS INVALID DATE CRASH)
+  // ─────────────────────────────────────────────────────────────
+  getSafeDateFromUnix(unix) {
+    if (!unix) return null;
+
+    const date = new Date(unix * 1000);
+
+    if (isNaN(date.getTime())) {
+      console.warn('⚠️ Invalid Unix timestamp received:', unix);
+      return null;
+    }
+
+    return date;
+  }
+
+ 
   async handleCheckoutCompleted(session) {
-    console.log('\n─── handleCheckoutCompleted ───');
-    console.log('Session ID  :', session.id);
-    console.log('Customer    :', session.customer);
-    console.log('Subscription:', session.subscription);
-    console.log('Metadata    :', JSON.stringify(session.metadata));
+    console.log('\n── handleCheckoutCompleted ──');
 
     const { planType, userId } = session.metadata || {};
 
-    if (!userId) return console.error('❌ Missing userId in session.metadata — check createCheckoutSession sets metadata correctly');
-    if (!planType) return console.error('❌ Missing planType in session.metadata');
-    if (!mongoose.Types.ObjectId.isValid(userId)) return console.error('❌ userId is not a valid ObjectId:', userId);
-
-    try {
-      const user = await User.findById(userId);
-      if (!user) return console.error('❌ No user found with _id:', userId);
-
-      console.log('👤 User found:', user.email, '| current role:', user.role);
-
-      // Fetch full subscription from Stripe to get currentPeriodEnd
-      let currentPeriodEnd = null;
-      if (session.subscription) {
-        const stripeSub = await stripe.subscriptions.retrieve(session.subscription);
-        currentPeriodEnd = new Date(stripeSub.current_period_end * 1000);
-      }
-
-      const newRole = PLAN_TO_ROLE[planType] || 'FREE';
-
-      user.stripeCustomerId               = session.customer;
-      user.subscription.subscriptionId    = session.subscription;
-      user.subscription.plan              = planType;
-      user.subscription.status            = 'active';
-      user.subscription.currentPeriodEnd  = currentPeriodEnd;
-      user.subscription.cancelAtPeriodEnd = false;
-      user.role                           = newRole; // ← gates all features
-
-      await user.save();
-      console.log(`✅ DB updated — plan: ${planType} | role: ${newRole} | periodEnd: ${currentPeriodEnd}`);
-
-    } catch (error) {
-      console.error('❌ handleCheckoutCompleted DB error:', error.message);
-      console.error(error.stack);
+    if (!userId || !planType) {
+      console.error('❌ Missing metadata in checkout session');
+      return;
     }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      console.error('❌ Invalid userId:', userId);
+      return;
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      console.error('❌ User not found:', userId);
+      return;
+    }
+
+    console.log('👤 User found:', user.email);
+
+    let currentPeriodEnd = null;
+
+    if (session.subscription) {
+      const stripeSub = await stripe.subscriptions.retrieve(
+        session.subscription
+      );
+
+      currentPeriodEnd = this.getSafeDateFromUnix(
+        stripeSub.current_period_end
+      );
+    }
+
+    const newRole = PLAN_TO_ROLE[planType] || 'FREE';
+
+    user.stripeCustomerId = session.customer;
+    user.subscription.subscriptionId = session.subscription;
+    user.subscription.plan = planType;
+    user.subscription.status = 'active';
+    user.subscription.cancelAtPeriodEnd = false;
+
+    if (currentPeriodEnd) {
+      user.subscription.currentPeriodEnd = currentPeriodEnd;
+    }
+
+    user.role = newRole;
+
+    await user.save();
+
+    console.log(`✅ User upgraded to ${planType}`);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+
   async handleSubscriptionCreated(subscription) {
-    try {
-      const user = await User.findOne({ stripeCustomerId: subscription.customer });
-      if (!user) return console.error('❌ handleSubscriptionCreated: user not found for customer:', subscription.customer);
+    const user = await User.findOne({
+      stripeCustomerId: subscription.customer
+    });
 
-      // Only fill in if checkout.session.completed hasn't already done it
-      if (!user.subscription.subscriptionId) {
-        user.subscription.subscriptionId   = subscription.id;
-        user.subscription.status           = subscription.status;
-        user.subscription.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
-        await user.save();
-        console.log(`✅ Subscription created for user ${user._id}`);
+    if (!user) {
+      console.error('❌ User not found for customer:', subscription.customer);
+      return;
+    }
+
+    if (!user.subscription.subscriptionId) {
+      user.subscription.subscriptionId = subscription.id;
+      user.subscription.status = subscription.status;
+
+      const date = this.getSafeDateFromUnix(
+        subscription.current_period_end
+      );
+
+      if (date) {
+        user.subscription.currentPeriodEnd = date;
       }
-    } catch (error) {
-      console.error('❌ handleSubscriptionCreated error:', error.message);
+
+      await user.save();
+      console.log('✅ Subscription created saved');
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+
   async handleSubscriptionUpdated(subscription) {
-    try {
-      const user = await User.findOne({ 'subscription.subscriptionId': subscription.id });
-      if (!user) return console.error('❌ handleSubscriptionUpdated: user not found for sub:', subscription.id);
+    const user = await User.findOne({
+      'subscription.subscriptionId': subscription.id
+    });
 
-      user.subscription.status            = subscription.status;
-      user.subscription.currentPeriodEnd  = new Date(subscription.current_period_end * 1000);
-      user.subscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
-
-      if (subscription.status === 'active') {
-        user.role = PLAN_TO_ROLE[user.subscription.plan] || 'FREE';
-      }
-
-      await user.save();
-      console.log(`✅ Subscription updated for user ${user._id} — status: ${subscription.status}`);
-    } catch (error) {
-      console.error('❌ handleSubscriptionUpdated error:', error.message);
+    if (!user) {
+      console.error('❌ User not found for subscription:', subscription.id);
+      return;
     }
+
+    user.subscription.status = subscription.status;
+    user.subscription.cancelAtPeriodEnd =
+      subscription.cancel_at_period_end;
+
+    const date = this.getSafeDateFromUnix(
+      subscription.current_period_end
+    );
+
+    if (date) {
+      user.subscription.currentPeriodEnd = date;
+    }
+
+    if (subscription.status === 'active') {
+      user.role =
+        PLAN_TO_ROLE[user.subscription.plan] || 'FREE';
+    }
+
+    await user.save();
+    console.log('✅ Subscription updated');
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+  
   async handleSubscriptionDeleted(subscription) {
-    try {
-      const user = await User.findOne({ 'subscription.subscriptionId': subscription.id });
-      if (!user) return console.error('❌ handleSubscriptionDeleted: user not found for sub:', subscription.id);
+    const user = await User.findOne({
+      'subscription.subscriptionId': subscription.id
+    });
 
-      user.role                           = 'FREE';
-      user.subscription.status            = 'cancelled';
-      user.subscription.plan              = 'none';
-      user.subscription.subscriptionId    = null;
-      user.subscription.currentPeriodEnd  = new Date();
-      user.subscription.cancelAtPeriodEnd = false;
-
-      await user.save();
-      console.log(`✅ Subscription deleted — user ${user._id} role reset to FREE`);
-    } catch (error) {
-      console.error('❌ handleSubscriptionDeleted error:', error.message);
+    if (!user) {
+      console.error('❌ User not found for deleted subscription');
+      return;
     }
+
+    user.role = 'FREE';
+    user.subscription.status = 'cancelled';
+    user.subscription.plan = 'none';
+    user.subscription.subscriptionId = null;
+    user.subscription.currentPeriodEnd = null;
+    user.subscription.cancelAtPeriodEnd = false;
+
+    await user.save();
+
+    console.log('✅ Subscription cancelled & role reset');
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+  
   async handlePaymentSucceeded(invoice) {
     const subscriptionId =
       invoice.subscription ||
@@ -186,23 +232,37 @@ class WebhookController {
 
     if (!subscriptionId) return;
 
-    try {
-      const user = await User.findOne({ 'subscription.subscriptionId': subscriptionId });
-      if (!user) return console.error('❌ handlePaymentSucceeded: user not found for sub:', subscriptionId);
+    const user = await User.findOne({
+      'subscription.subscriptionId': subscriptionId
+    });
 
-      const stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
-      user.subscription.status           = 'active';
-      user.subscription.currentPeriodEnd = new Date(stripeSub.current_period_end * 1000);
-      user.role = PLAN_TO_ROLE[user.subscription.plan] || 'FREE';
-
-      await user.save();
-      console.log(`✅ Payment succeeded for user ${user._id}`);
-    } catch (error) {
-      console.error('❌ handlePaymentSucceeded error:', error.message);
+    if (!user) {
+      console.error('❌ User not found for payment success');
+      return;
     }
+
+    const stripeSub = await stripe.subscriptions.retrieve(
+      subscriptionId
+    );
+
+    const date = this.getSafeDateFromUnix(
+      stripeSub.current_period_end
+    );
+
+    if (date) {
+      user.subscription.currentPeriodEnd = date;
+    }
+
+    user.subscription.status = 'active';
+    user.role =
+      PLAN_TO_ROLE[user.subscription.plan] || 'FREE';
+
+    await user.save();
+
+    console.log('✅ Payment succeeded — subscription active');
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+ 
   async handlePaymentFailed(invoice) {
     const subscriptionId =
       invoice.subscription ||
@@ -210,16 +270,19 @@ class WebhookController {
 
     if (!subscriptionId) return;
 
-    try {
-      const user = await User.findOne({ 'subscription.subscriptionId': subscriptionId });
-      if (!user) return console.error('❌ handlePaymentFailed: user not found for sub:', subscriptionId);
+    const user = await User.findOne({
+      'subscription.subscriptionId': subscriptionId
+    });
 
-      user.subscription.status = 'past_due';
-      await user.save();
-      console.log(`⚠️  Payment failed — user ${user._id} marked past_due`);
-    } catch (error) {
-      console.error('❌ handlePaymentFailed error:', error.message);
+    if (!user) {
+      console.error('❌ User not found for payment failure');
+      return;
     }
+
+    user.subscription.status = 'past_due';
+    await user.save();
+
+    console.log('⚠️ Payment failed — user marked past_due');
   }
 }
 

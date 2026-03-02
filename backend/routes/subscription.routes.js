@@ -2,6 +2,8 @@ import express from "express";
 import subscriptionController from "../controllers/subscription.controller.js";
 import authenticate from "../middleware/auth.middleware.js";
 const router = express.Router();
+import webhookController from '../controllers/webhook.controller.js';
+
 
 router.get(
   "/plans",
@@ -44,6 +46,11 @@ router.post(
   subscriptionController.createPortalSession.bind(subscriptionController),
 );
 
+router.post(
+  '/webhook',
+  express.raw({ type: 'application/json' }), // raw body for Stripe signature verification
+  webhookController.handleWebhook.bind(webhookController)
+);
 
 
 export default router;
