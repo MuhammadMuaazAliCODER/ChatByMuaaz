@@ -17,14 +17,13 @@ import friendRoutes from './routes/friendRequest.route.js';
 import friend from './routes/friend.routes.js';
 import emailRoutes from "./routes/email.routes.js";
 import pushroutes from "./routes/push.routes.js"
-// 🔥 Import Stripe subscription routes
+
 import subscriptionRoutes from './routes/subscription.routes.js';
 
 const app = express();
 const server = http.createServer(app);
 
-// ⚠️ CRITICAL: Webhook route MUST be registered BEFORE express.json()
-// Stripe webhooks require raw body for signature verification
+
 app.use('/api/subscription/webhook', 
   express.raw({ type: 'application/json' }), 
   subscriptionRoutes
@@ -58,7 +57,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/friend', friendRoutes);
 app.use('/api/friends', friend);
 app.use("/api/email", emailRoutes);
-app.use("api/push",pushroutes)
+app.use("/api/push",pushroutes)
 
 app.use('/api/subscription', subscriptionRoutes);
 
