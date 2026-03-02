@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatByMuaaz — Dev Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-bg">
+    <div class="auth-orb orb1"></div>
+    <div class="auth-orb orb2"></div>
+    <div class="auth-orb orb3"></div>
+  </div>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <circle cx="22" cy="22" r="22" fill="url(#lg1)"/>
+        <path d="M12 22l6 6 14-14" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <defs><linearGradient id="lg1" x1="0" y1="0" x2="44" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#2AABEE"/><stop offset="1" stop-color="#229ED9"/></linearGradient></defs>
+      </svg>
+      <span>ChatByMuaaz</span>
+    </div>
+    <p class="auth-subtitle">Developer Test Console</p>
+
+    <!-- BASE URL -->
+    <div class="field-group">
+      <label>Base URL</label>
+      <input id="baseUrl" type="text" value="http://localhost:5300/api" placeholder="http://localhost:5300/api" />
+    </div>
+
+    <!-- TABS -->
+    <div class="auth-tabs">
+      <button class="tab-btn active" data-tab="login">Login</button>
+      <button class="tab-btn" data-tab="register">Register</button>
+    </div>
+
+    <!-- LOGIN TAB -->
+    <div class="tab-content active" id="tab-login">
+      <div class="field-group">
+        <label>Username</label>
+        <input id="loginUsername" type="text" placeholder="muaaz_ali" />
+      </div>
+      <div class="field-group">
+        <label>Password</label>
+        <input id="loginPassword" type="password" placeholder="password123" />
+      </div>
+      <button class="btn-primary" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <!-- REGISTER TAB -->
+    <div class="tab-content" id="tab-register">
+      <div class="field-group">
+        <label>Name</label>
+        <input id="regName" type="text" placeholder="Muhammad Muaaz" />
+      </div>
+      <div class="field-group">
+        <label>Username</label>
+        <input id="regUsername" type="text" placeholder="muaaz_ali" />
+      </div>
+      <div class="field-group">
+        <label>Email</label>
+        <input id="regEmail" type="email" placeholder="muaaz@example.com" />
+      </div>
+      <div class="field-group">
+        <label>Password</label>
+        <input id="regPassword" type="password" placeholder="password123" />
+      </div>
+      <button class="btn-primary" onclick="doRegister()">Create Account</button>
+    </div>
+
+    <!-- 2FA PANEL -->
+    <div class="tab-content" id="tab-2fa">
+      <p class="info-text">Enter the OTP sent to your email</p>
+      <div class="field-group">
+        <label>OTP Code</label>
+        <input id="twoFaOtp" type="text" placeholder="123456" maxlength="6" />
+      </div>
+      <button class="btn-primary" onclick="do2FA()">Verify</button>
+    </div>
+
+    <!-- VERIFY EMAIL PANEL -->
+    <div class="tab-content" id="tab-verify">
+      <p class="info-text">Check your email for a verification OTP</p>
+      <div class="field-group">
+        <label>Email</label>
+        <input id="verifyEmail" type="email" placeholder="muaaz@example.com" />
+      </div>
+      <div class="field-group">
+        <label>OTP Code</label>
+        <input id="verifyOtp" type="text" placeholder="123456" maxlength="6" />
+      </div>
+      <button class="btn-primary" onclick="doVerifyEmail()">Verify Email</button>
+      <button class="btn-ghost" onclick="doResendVerification()">Resend OTP</button>
+    </div>
+
+    <div id="authMsg" class="auth-msg"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="appScreen" class="app-screen hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <svg width="28" height="28" viewBox="0 0 44 44" fill="none">
+          <circle cx="22" cy="22" r="22" fill="url(#lg2)"/>
+          <path d="M12 22l6 6 14-14" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <defs><linearGradient id="lg2" x1="0" y1="0" x2="44" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#2AABEE"/><stop offset="1" stop-color="#229ED9"/></linearGradient></defs>
+        </svg>
+        <span>ChatByMuaaz</span>
+      </div>
+      <button class="icon-btn" onclick="toggleMenu()" title="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="sidebar-search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="searchInput" type="text" placeholder="Search users..." oninput="doSearch()" />
+    </div>
+
+    <!-- NAV TABS -->
+    <div class="sidebar-nav">
+      <button class="nav-tab active" data-panel="chats" onclick="switchPanel('chats')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Chats
+      </button>
+      <button class="nav-tab" data-panel="friends" onclick="switchPanel('friends')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Friends
+      </button>
+      <button class="nav-tab" data-panel="users" onclick="switchPanel('users')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+        Users
+      </button>
+      <button class="nav-tab" data-panel="tools" onclick="switchPanel('tools')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Tools
+      </button>
+    </div>
+
+    <!-- CHATS PANEL -->
+    <div class="panel active" id="panel-chats">
+      <div class="panel-actions">
+        <button class="btn-sm" onclick="loadChats()">↻ Refresh</button>
+        <button class="btn-sm" onclick="showCreateGroup()">+ Group</button>
+      </div>
+      <div class="list-container" id="chatsList">
+        <div class="empty-state">Login and click Refresh</div>
+      </div>
+    </div>
+
+    <!-- FRIENDS PANEL -->
+    <div class="panel" id="panel-friends">
+      <div class="panel-actions">
+        <button class="btn-sm" onclick="loadFriends()">↻ Friends</button>
+        <button class="btn-sm" onclick="loadIncomingRequests()">📥 Requests</button>
+      </div>
+      <div class="field-group" style="margin:8px 12px 4px">
+        <input id="friendUsername" type="text" placeholder="Send request to username..." style="font-size:13px;padding:8px 10px" />
+        <button class="btn-sm mt4" onclick="doSendFriendRequest()" style="width:100%;margin-top:6px">Send Request</button>
+      </div>
+      <div class="list-container" id="friendsList">
+        <div class="empty-state">Click refresh to load</div>
+      </div>
+    </div>
+
+    <!-- USERS PANEL -->
+    <div class="panel" id="panel-users">
+      <div class="panel-actions">
+        <button class="btn-sm" onclick="loadUsers()">↻ Load All</button>
+      </div>
+      <div class="list-container" id="usersList">
+        <div class="empty-state">Click Load All</div>
+      </div>
+    </div>
+
+    <!-- TOOLS PANEL -->
+    <div class="panel" id="panel-tools">
+      <div class="tools-list">
+        <div class="tool-section">
+          <div class="tool-section-title">⚙️ Account</div>
+          <button class="tool-btn" onclick="doVerifyToken()">Verify Token</button>
+          <button class="tool-btn" onclick="doLogout()">Logout</button>
+          <button class="tool-btn" onclick="doToggle2FA(true)">Enable 2FA</button>
+          <button class="tool-btn" onclick="doToggle2FA(false)">Disable 2FA</button>
+        </div>
+        <div class="tool-section">
+          <div class="tool-section-title">🔑 Password</div>
+          <button class="tool-btn" onclick="showForgotPassword()">Forgot Password</button>
+          <button class="tool-btn" onclick="showRequestPasswordChange()">Change Password</button>
+          <button class="tool-btn" onclick="showChangeUsername()">Change Username</button>
+        </div>
+        <div class="tool-section">
+          <div class="tool-section-title">🔔 Push Notifications</div>
+          <button class="tool-btn" onclick="doGetVapidKey()">Get VAPID Key</button>
+          <button class="tool-btn" onclick="doGetSubscriptions()">My Subscriptions</button>
+          <button class="tool-btn" onclick="doSendTestNotification()">Test Notification</button>
+        </div>
+        <div class="tool-section">
+          <div class="tool-section-title">💳 Subscription</div>
+          <button class="tool-btn" onclick="doGetPlans()">Get Plans</button>
+          <button class="tool-btn" onclick="doGetSubStatus()">My Status</button>
+          <button class="tool-btn" onclick="doCancelSubscription()">Cancel Sub</button>
+          <button class="tool-btn" onclick="doResumeSubscription()">Resume Sub</button>
+          <button class="tool-btn" onclick="doOpenPortal()">Billing Portal</button>
+        </div>
+        <div class="tool-section">
+          <div class="tool-section-title">❤️ Health</div>
+          <button class="tool-btn" onclick="doHealthCheck()">Health Check</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR FOOTER -->
+    <div class="sidebar-footer">
+      <div class="user-pill" id="userPill">
+        <div class="avatar sm" id="footerAvatar">?</div>
+        <div class="user-pill-info">
+          <span id="footerName">Not logged in</span>
+          <span id="footerToken" class="token-badge">No token</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- MOBILE HEADER -->
+    <div class="mobile-header">
+      <button class="icon-btn" onclick="toggleSidebar()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span>ChatByMuaaz</span>
+    </div>
+
+    <!-- WELCOME / CHAT AREA -->
+    <div id="welcomePane" class="welcome-pane">
+      <div class="welcome-icon">
+        <svg width="80" height="80" viewBox="0 0 44 44" fill="none">
+          <circle cx="22" cy="22" r="22" fill="url(#lg3)" opacity="0.15"/>
+          <path d="M12 22l6 6 14-14" stroke="#2AABEE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <defs><linearGradient id="lg3" x1="0" y1="0" x2="44" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#2AABEE"/><stop offset="1" stop-color="#229ED9"/></linearGradient></defs>
+        </svg>
+      </div>
+      <h2>ChatByMuaaz Dev Console</h2>
+      <p>Select a chat to start messaging, or use the sidebar to manage friends, users & tools.</p>
+    </div>
+
+    <div id="chatPane" class="chat-pane hidden">
+      <div class="chat-header">
+        <button class="icon-btn mobile-back" onclick="closeChatPane()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="avatar" id="chatAvatar">?</div>
+        <div class="chat-header-info">
+          <div class="chat-name" id="chatName">Chat Name</div>
+          <div class="chat-sub" id="chatSub">—</div>
+        </div>
+        <div class="chat-actions">
+          <button class="icon-btn" onclick="loadMessages()" title="Refresh messages">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+          <button class="icon-btn" onclick="doMarkAllRead()" title="Mark all read">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="messages-area" id="messagesArea">
+        <div class="empty-state center">No messages yet</div>
+      </div>
+
+      <div class="message-input-bar">
+        <div class="msg-input-wrap">
+          <input id="msgInput" type="text" placeholder="Write a message..." onkeydown="if(event.key==='Enter')sendMessage()" />
+          <select id="msgType" title="Message type">
+            <option value="text">Text</option>
+            <option value="audio">Audio</option>
+          </select>
+        </div>
+        <button class="send-btn" onclick="sendMessage()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- RESPONSE LOG -->
+  <div class="log-panel" id="logPanel">
+    <div class="log-header">
+      <span>API Response Log</span>
+      <div class="log-actions">
+        <button class="icon-btn" onclick="clearLog()" title="Clear log">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+        <button class="icon-btn" onclick="toggleLog()" title="Toggle log" id="logToggleBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+
+</div>
+
+<!-- MODAL -->
+<div id="modal" class="modal-overlay hidden" onclick="closeModal(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span id="modalTitle">Modal</span>
+      <button class="icon-btn" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<script src="js/api.js"></script>
+<script src="js/state.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
