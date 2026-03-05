@@ -115,8 +115,8 @@ class SubscriptionController {
             quantity: 1
           }
         ],
-        success_url: `http://localhost:5300/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-cancel_url: `http://localhost:5300/subscription/cancel`,
+        success_url: FRONTEND_URL,
+cancel_url: FRONTEND_URL,
         metadata: {
           userId: user._id.toString(),
           planType

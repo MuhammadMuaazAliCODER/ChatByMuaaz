@@ -18,7 +18,7 @@ export const initSocket = (server) => {
             return;
         }
 
-        jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        jwt.verify(token, process.env.JWT_SECRET, async (err, user) => {
             if (err) {
                 console.log('Invalid token, closing connection');
                 ws.close();
@@ -28,11 +28,27 @@ export const initSocket = (server) => {
             const userId = user._id;
             console.log(`User ${userId} connected`);
 
+            // If user already has a connection open, close the old one cleanly
+            if (clients.has(userId)) {
+                const oldWs = clients.get(userId);
+                oldWs.terminate();
+            }
+
             // Store the connection
             clients.set(userId, ws);
             onlineUsers.add(userId);
 
-            // Send current online users to the newly connected user
+            // ── Mark user as online in DB ──────────────────────────
+            try {
+                // Import your User model at the top of your file if not already done
+                // import User from '../models/user.model.js';
+                // Uncomment the lines below once you import your User model:
+                // await User.findByIdAndUpdate(userId, { online: true, lastSeen: new Date() });
+            } catch (dbErr) {
+                console.error('Failed to update online status in DB:', dbErr);
+            }
+
+            // Send current online users list to the newly connected user
             ws.send(JSON.stringify({
                 type: 'online_users',
                 users: Array.from(onlineUsers)
@@ -44,7 +60,7 @@ export const initSocket = (server) => {
                 userId: userId
             });
 
-            // Handle incoming messages from this client
+            // ── Handle incoming messages from this client ──────────
             ws.on('message', (message) => {
                 try {
                     const data = JSON.parse(message);
@@ -54,11 +70,19 @@ export const initSocket = (server) => {
                 }
             });
 
-            // Handle disconnection
-            ws.on('close', () => {
+            // ── Handle disconnection ───────────────────────────────
+            ws.on('close', async () => {
                 console.log(`User ${userId} disconnected`);
                 clients.delete(userId);
                 onlineUsers.delete(userId);
+
+                // ── Mark user as offline in DB ─────────────────────
+                try {
+                    // Uncomment once you import your User model:
+                    // await User.findByIdAndUpdate(userId, { online: false, lastSeen: new Date() });
+                } catch (dbErr) {
+                    console.error('Failed to update offline status in DB:', dbErr);
+                }
 
                 // Broadcast to everyone that this user is now offline
                 broadcast({
@@ -67,9 +91,13 @@ export const initSocket = (server) => {
                 });
             });
 
-            // Handle errors
+            // ── Handle errors ──────────────────────────────────────
             ws.on('error', (error) => {
                 console.error('WebSocket error:', error);
+                // Clean up on error too
+                clients.delete(userId);
+                onlineUsers.delete(userId);
+                broadcast({ type: 'user_offline', userId });
             });
         });
     });
@@ -77,9 +105,10 @@ export const initSocket = (server) => {
     console.log('WebSocket server initialized');
 };
 
-// Handle messages from clients (typing indicators, message status, etc.)
+// ── Handle messages from clients ──────────────────────────────
 function handleClientMessage(userId, data) {
     switch (data.type) {
+
         case 'typing':
             // Broadcast typing indicator to other users in the chat
             broadcast({
@@ -87,7 +116,7 @@ function handleClientMessage(userId, data) {
                 chatId: data.chatId,
                 userId: userId,
                 isTyping: data.isTyping
-            }, [userId]); // Exclude sender
+            }, [userId]); // Exclude the sender
             break;
 
         case 'message_delivered':
@@ -123,7 +152,7 @@ function handleClientMessage(userId, data) {
     }
 }
 
-// Broadcast to all connected clients (with optional exclusion list)
+// ── Broadcast to all connected clients (with optional exclusion list) ──
 export const broadcast = (data, excludeUsers = []) => {
     const msg = JSON.stringify(data);
     clients.forEach((ws, userId) => {
@@ -133,7 +162,7 @@ export const broadcast = (data, excludeUsers = []) => {
     });
 };
 
-// Send message to specific user
+// ── Send message to a specific user ───────────────────────────
 export const sendToUser = (userId, data) => {
     const ws = clients.get(userId);
     if (ws && ws.readyState === 1) {
@@ -143,24 +172,24 @@ export const sendToUser = (userId, data) => {
     return false;
 };
 
-// Send new message notification (with push notification if offline)
+// ── Send new message notification (push if offline) ───────────
 export const sendMessageNotification = async (recipientId, messageData) => {
     const isOnline = isUserOnline(recipientId);
-    
+
     if (isOnline) {
-        // User is online, send via WebSocket
+        // User is online — send via WebSocket
         sendToUser(recipientId, {
             type: 'new_message',
             message: messageData,
             playSound: true
         });
     } else {
-        // User is offline, send push notification
+        // User is offline — send push notification
         try {
             await sendPushNotification(recipientId, {
                 title: messageData.senderName || 'New Message',
-                body: messageData.type === 'voice' 
-                    ? '🎤 Voice message' 
+                body: messageData.type === 'voice'
+                    ? '🎤 Voice message'
                     : messageData.content,
                 icon: messageData.senderAvatar || '/default-avatar.png',
                 badge: '/badge-icon.png',
@@ -176,25 +205,12 @@ export const sendMessageNotification = async (recipientId, messageData) => {
     }
 };
 
-// Check if user is online
-export const isUserOnline = (userId) => {
-    return onlineUsers.has(userId);
-};
+// ── Online status helpers ──────────────────────────────────────
+export const isUserOnline = (userId) => onlineUsers.has(userId);
 
-// Get all online users
-export const getOnlineUsers = () => {
-    return Array.from(onlineUsers);
-};
+export const getOnlineUsers = () => Array.from(onlineUsers);
 
-// Get online status for multiple users
-export const getUsersOnlineStatus = (userIds) => {
-    return userIds.map(id => ({
-        userId: id,
-        isOnline: onlineUsers.has(id)
-    }));
-};
+export const getUsersOnlineStatus = (userIds) =>
+    userIds.map(id => ({ userId: id, isOnline: onlineUsers.has(id) }));
 
-// Get count of online users
-export const getOnlineUserCount = () => {
-    return onlineUsers.size;
-};
+export const getOnlineUserCount = () => onlineUsers.size;

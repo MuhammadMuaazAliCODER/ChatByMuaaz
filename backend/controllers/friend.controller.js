@@ -9,14 +9,21 @@ export const getFriends = async (req, res) => {
     const friends = await Friend.find({
       $or: [{ user1: userId }, { user2: userId }]
     })
-    .populate('user1', 'username email')
-    .populate('user2', 'username email');
+    .populate('user1', 'username email profilePicture')
+    .populate('user2', 'username email profilePicture');
 
     const friendList = friends
       .filter(f => f.user1 && f.user2)
       .map(f => {
         const user1Id = f.user1._id.toString();
-        return user1Id === userId ? f.user2 : f.user1;
+        const friend = user1Id === userId ? f.user2 : f.user1;
+
+        return {
+          _id: friend._id,
+          username: friend.username,
+          email: friend.email,
+          profilePicture: friend.profilePicture
+        };
       });
 
     res.status(200).json(friendList);
