@@ -1,133 +1,47 @@
-import webPush from 'web-push';
+import webpush from 'web-push';
 import PushSubscription from '../models/PushSubscription.js';
 
-// Configure web-push with VAPID keys
-// Generate keys with: npx web-push generate-vapid-keys
-webPush.setVapidDetails(
-    `mailto:${process.env.VAPID_EMAIL || 'admin@chatbymuaaz.online'}`,
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-);
+// ── Configure VAPID ───────────────────────────────────────────────────
+// Generate keys once with: npx web-push generate-vapid-keys
+// Then add to your .env:
+//   VAPID_PUBLIC_KEY=...
+//   VAPID_PRIVATE_KEY=...
+//   VAPID_MAILTO=mailto:you@yourdomain.com
 
-/**
- * Send push notification to a user
- * @param {String} userId - User ID to send notification to
- * @param {Object} payload - Notification payload
- * @returns {Promise}
- */
-export const sendPushNotification = async (userId, payload) => {
-    try {
-        // Get all active subscriptions for this user
-        const subscriptions = await PushSubscription.find({
-            user: userId,
-            active: true
-        });
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+        process.env.VAPID_MAILTO || 'mailto:admin@chatapp.com',
+        process.env.VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY
+    );
+    console.log('[Push] VAPID configured');
+} else {
+    console.warn('[Push] VAPID keys not set — push notifications disabled');
+}
 
-        if (subscriptions.length === 0) {
-            console.log(`No active push subscriptions for user ${userId}`);
-            return;
-        }
-
-        const notificationPayload = JSON.stringify({
-            title: payload.title,
-            body: payload.body,
-            icon: payload.icon || '/icon-192x192.png',
-            badge: payload.badge || '/badge-72x72.png',
-            vibrate: [200, 100, 200],
-            data: payload.data || {},
-            actions: payload.actions || [],
-            tag: payload.tag || 'message-notification',
-            requireInteraction: false,
-            timestamp: Date.now()
-        });
-
-        // Send to all subscriptions
-        const results = await Promise.allSettled(
-            subscriptions.map(async (subscription) => {
-                try {
-                    await webPush.sendNotification(
-                        {
-                            endpoint: subscription.endpoint,
-                            keys: {
-                                p256dh: subscription.keys.p256dh,
-                                auth: subscription.keys.auth
-                            }
-                        },
-                        notificationPayload
-                    );
-                    return { success: true, subscriptionId: subscription._id };
-                } catch (error) {
-                    // If subscription is invalid, mark as inactive
-                    if (error.statusCode === 410 || error.statusCode === 404) {
-                        await PushSubscription.findByIdAndUpdate(
-                            subscription._id,
-                            { active: false }
-                        );
-                    }
-                    throw error;
-                }
-            })
-        );
-
-        const successful = results.filter(r => r.status === 'fulfilled').length;
-        const failed = results.filter(r => r.status === 'rejected').length;
-
-        console.log(`Push notifications sent: ${successful} successful, ${failed} failed`);
-        
-        return { successful, failed };
-    } catch (error) {
-        console.error('Error sending push notification:', error);
-        throw error;
-    }
-};
-
-/**
- * Save a new push subscription
- * @param {String} userId - User ID
- * @param {Object} subscription - Push subscription object from browser
- * @param {String} userAgent - Browser user agent
- * @returns {Promise}
- */
+// ── Save a push subscription for a user ──────────────────────────────
 export const savePushSubscription = async (userId, subscription, userAgent = '') => {
     try {
-        // Check if subscription already exists
-        const existing = await PushSubscription.findOne({
-            endpoint: subscription.endpoint
-        });
-
-        if (existing) {
-            // Update existing subscription
-            existing.user = userId;
-            existing.keys = subscription.keys;
-            existing.userAgent = userAgent;
-            existing.active = true;
-            await existing.save();
-            return existing;
-        }
-
-        // Create new subscription
-        const newSubscription = new PushSubscription({
-            user: userId,
-            endpoint: subscription.endpoint,
-            keys: subscription.keys,
-            userAgent,
-            active: true
-        });
-
-        await newSubscription.save();
-        return newSubscription;
+        // Upsert by endpoint — if it already exists, update keys & mark active
+        const saved = await PushSubscription.findOneAndUpdate(
+            { endpoint: subscription.endpoint },
+            {
+                user:      userId,
+                endpoint:  subscription.endpoint,
+                keys:      subscription.keys,
+                userAgent,
+                active:    true,
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        return saved;
     } catch (error) {
-        console.error('Error saving push subscription:', error);
+        console.error('[Push] Failed to save subscription:', error);
         throw error;
     }
 };
 
-/**
- * Remove a push subscription
- * @param {String} userId - User ID
- * @param {String} endpoint - Subscription endpoint
- * @returns {Promise}
- */
+// ── Remove a push subscription ────────────────────────────────────────
 export const removePushSubscription = async (userId, endpoint) => {
     try {
         await PushSubscription.findOneAndUpdate(
@@ -135,35 +49,94 @@ export const removePushSubscription = async (userId, endpoint) => {
             { active: false }
         );
     } catch (error) {
-        console.error('Error removing push subscription:', error);
+        console.error('[Push] Failed to remove subscription:', error);
         throw error;
     }
 };
 
-/**
- * Get all active subscriptions for a user
- * @param {String} userId - User ID
- * @returns {Promise}
- */
+// ── Get all active subscriptions for a user ───────────────────────────
 export const getUserSubscriptions = async (userId) => {
-    return await PushSubscription.find({
-        user: userId,
-        active: true
-    });
+    return PushSubscription.find({ user: userId, active: true });
 };
 
 /**
- * Test push notification
- * @param {String} userId - User ID to test
- * @returns {Promise}
+ * Send a push notification to a user (all their active devices).
+ *
+ * @param {string} userId       - MongoDB user _id
+ * @param {object} payload      - Notification payload
+ * @param {string} payload.title
+ * @param {string} payload.body
+ * @param {string} [payload.icon]
+ * @param {string} [payload.badge]
+ * @param {string} [payload.tag]       - Notification tag (replaces previous with same tag)
+ * @param {boolean}[payload.renotify]  - Re-alert if replacing an existing tag
+ * @param {object} [payload.data]      - Extra data passed to service worker (e.g. url, chatId)
  */
+export const sendPushNotification = async (userId, payload) => {
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+        console.warn('[Push] Skipping — VAPID keys not configured');
+        return;
+    }
+
+    const subscriptions = await getUserSubscriptions(userId);
+    if (!subscriptions.length) return;
+
+    const notifPayload = JSON.stringify({
+        title:    payload.title    || 'New Message',
+        body:     payload.body     || '',
+        icon:     payload.icon     || '/icons/icon-192x192.png',
+        badge:    payload.badge    || '/icons/badge-72x72.png',
+        tag:      payload.tag      || 'chat-notification',
+        renotify: payload.renotify ?? false,
+        data:     payload.data     || {},
+    });
+
+    const results = await Promise.allSettled(
+        subscriptions.map(sub =>
+            webpush.sendNotification(
+                { endpoint: sub.endpoint, keys: sub.keys },
+                notifPayload,
+                { TTL: 86400 } // 24 hours
+            ).catch(async (err) => {
+                // 410 Gone = subscription expired/unsubscribed → deactivate it
+                if (err.statusCode === 410 || err.statusCode === 404) {
+                    console.log(`[Push] Deactivating expired subscription: ${sub.endpoint}`);
+                    await PushSubscription.findByIdAndUpdate(sub._id, { active: false });
+                } else {
+                    console.error(`[Push] Failed to send to ${sub.endpoint}:`, err.message);
+                }
+            })
+        )
+    );
+
+    const sent   = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (sent)   console.log(`[Push] Sent to ${sent}/${subscriptions.length} devices for user ${userId}`);
+    if (failed) console.warn(`[Push] Failed for ${failed} devices`);
+};
+
+// ── Send a test notification to a user ───────────────────────────────
 export const sendTestNotification = async (userId) => {
-    return await sendPushNotification(userId, {
-        title: 'Test Notification',
-        body: 'This is a test notification from ChatByMuaaz!',
-        icon: '/icon-192x192.png',
+    return sendPushNotification(userId, {
+        title: '🔔 Notifications are working!',
+        body:  'You will now receive message alerts even when the app is closed.',
+        tag:   'test-notification',
+        data:  { url: '/' },
+    });
+};
+
+// ── Send a new message push notification (convenience wrapper) ────────
+export const sendNewMessagePush = async (recipientId, { senderName, senderAvatar, content, chatId, messageId, type }) => {
+    return sendPushNotification(recipientId, {
+        title:    senderName || 'New Message',
+        body:     type === 'audio' ? '🎤 Voice message' : (content || ''),
+        icon:     senderAvatar || '/icons/icon-192x192.png',
+        tag:      `chat-${chatId}`,
+        renotify: false,
         data: {
-            url: '/'
-        }
+            chatId,
+            messageId,
+            url: `/chat/${chatId}`,
+        },
     });
 };

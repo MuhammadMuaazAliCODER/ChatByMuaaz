@@ -1,12 +1,13 @@
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import { sendPushNotification } from '../services/push.service.js';
+import User from '../models/User.js';
 
 // Map of userId (string) -> WebSocket connection
 let clients = new Map();
 
 // Set of userIds that currently have an active WebSocket connection.
-// This is the ONLY source of truth for online status — never trust the DB field.
+// This is the ONLY source of truth for online status.
 let onlineUsers = new Set();
 
 export const initSocket = (server) => {
@@ -32,32 +33,30 @@ export const initSocket = (server) => {
             const userId = String(user._id);
             console.log(`[WS] User ${userId} connected`);
 
-            // If this user already has an open connection, terminate the old one cleanly
+            // Terminate any stale connection for this user
             if (clients.has(userId)) {
                 const oldWs = clients.get(userId);
                 oldWs.terminate();
                 console.log(`[WS] Terminated stale connection for user ${userId}`);
             }
 
-            // Register the new connection
             clients.set(userId, ws);
             onlineUsers.add(userId);
 
             // ── (Optional) Persist online status to DB ──────────────────
-            // Uncomment once you have your User model imported:
-            // try {
-            //     await User.findByIdAndUpdate(userId, { online: true, lastSeen: new Date() });
-            // } catch (dbErr) {
-            //     console.error('[WS] Failed to set online in DB:', dbErr);
-            // }
+            try {
+                await User.findByIdAndUpdate(userId, { online: true, lastSeen: new Date() });
+            } catch (dbErr) {
+                console.error('[WS] Failed to set online in DB:', dbErr);
+            }
 
-            // 1. Tell the newly connected user which users are currently online
+            // 1. Tell the newly connected user who is currently online
             ws.send(JSON.stringify({
                 type: 'online_users',
                 users: Array.from(onlineUsers),
             }));
 
-            // 2. Tell everyone else that this user just came online
+            // 2. Tell everyone else this user just came online
             broadcast({ type: 'user_online', userId }, [userId]);
 
             // ── Handle messages sent by this client ──────────────────────
@@ -75,12 +74,11 @@ export const initSocket = (server) => {
                 console.log(`[WS] User ${userId} disconnected`);
                 _removeUser(userId);
 
-                // ── (Optional) Persist offline status to DB ──────────────
-                // try {
-                //     await User.findByIdAndUpdate(userId, { online: false, lastSeen: new Date() });
-                // } catch (dbErr) {
-                //     console.error('[WS] Failed to set offline in DB:', dbErr);
-                // }
+                try {
+                    await User.findByIdAndUpdate(userId, { online: false, lastSeen: new Date() });
+                } catch (dbErr) {
+                    console.error('[WS] Failed to set offline in DB:', dbErr);
+                }
             });
 
             // ── Handle socket errors ─────────────────────────────────────
@@ -96,13 +94,9 @@ export const initSocket = (server) => {
 
 // ── Internal helper: remove user and broadcast offline ────────────────
 function _removeUser(userId) {
-    // Guard: only broadcast if the stored connection matches the closing socket
-    // (prevents a reconnect race where a new connection replaces the old one first)
     if (!onlineUsers.has(userId)) return;
-
     clients.delete(userId);
     onlineUsers.delete(userId);
-
     broadcast({ type: 'user_offline', userId });
 }
 
@@ -111,7 +105,6 @@ function handleClientMessage(userId, data) {
     switch (data.type) {
 
         case 'typing':
-            // Forward typing indicator to everyone in that chat except the sender
             broadcast({
                 type: 'typing',
                 chatId: data.chatId,
@@ -170,39 +163,65 @@ export const sendToUser = (userId, data) => {
     return false;
 };
 
-// ── Send new message notification (push if offline) ──────────────────
-export const sendMessageNotification = async (recipientId, messageData) => {
-    const id       = String(recipientId);
-    const isOnline = onlineUsers.has(id);
+/**
+ * Send a new message notification to all recipients of a chat.
+ *
+ * @param {string[]} recipientIds   - All user IDs that should receive the notification (excludes sender)
+ * @param {object}   messageData    - The full message object (populated sender, content, type, chatId, etc.)
+ * @param {number}   [unreadCount]  - The recipient's current unread count for this chat (optional)
+ */
+export const sendMessageNotification = async (recipientIds, messageData, unreadCount = 1) => {
+    const senderName   = messageData.sender?.name || messageData.sender?.username || 'Someone';
+    const senderAvatar = messageData.sender?.profilePicture || '';
+    const preview      = messageData.type === 'audio' ? '🎤 Voice message' : (messageData.content || '');
 
-    if (isOnline) {
-        sendToUser(id, {
-            type: 'new_message',
-            message: messageData,
-            playSound: true,
-        });
-    } else {
-        try {
-            await sendPushNotification(id, {
-                title: messageData.senderName || 'New Message',
-                body:  messageData.type === 'voice' ? '🎤 Voice message' : messageData.content,
-                icon:  messageData.senderAvatar || '/default-avatar.png',
-                badge: '/badge-icon.png',
-                data: {
-                    chatId:    messageData.chatId,
-                    messageId: messageData._id,
-                    url:       `/chat/${messageData.chatId}`,
+    for (const recipientId of recipientIds) {
+        const id       = String(recipientId);
+        const isOnline = onlineUsers.has(id);
+
+        if (isOnline) {
+            // ── User is online → deliver via WebSocket ─────────────────
+            sendToUser(id, {
+                type: 'new_message',
+                message: {
+                    ...messageData,
+                    // Ensure sender is always an object with enough info for the notification banner
+                    sender: {
+                        _id:            messageData.sender?._id || messageData.sender,
+                        name:           senderName,
+                        username:       messageData.sender?.username || '',
+                        profilePicture: senderAvatar,
+                    },
                 },
+                unreadCount, // frontend uses this to update badge
+                playSound: true,
             });
-        } catch (error) {
-            console.error('[WS] Failed to send push notification:', error);
+        } else {
+            // ── User is offline → send push notification ───────────────
+            try {
+                await sendPushNotification(id, {
+                    title: senderName,
+                    body:  preview,
+                    icon:  senderAvatar || '/icons/icon-192x192.png',
+                    badge: '/icons/badge-72x72.png',
+                    tag:   `chat-${messageData.chatId}`,   // Replaces previous notif for same chat
+                    renotify: false,
+                    data: {
+                        chatId:    messageData.chatId,
+                        messageId: messageData._id,
+                        url:       `/chat/${messageData.chatId}`,
+                    },
+                });
+            } catch (error) {
+                console.error(`[WS] Failed to send push notification to ${id}:`, error);
+            }
         }
     }
 };
 
 // ── Online status helpers ─────────────────────────────────────────────
-export const isUserOnline        = (userId)  => onlineUsers.has(String(userId));
-export const getOnlineUsers      = ()        => Array.from(onlineUsers);
-export const getOnlineUserCount  = ()        => onlineUsers.size;
-export const getUsersOnlineStatus = (userIds) =>
+export const isUserOnline         = (userId)   => onlineUsers.has(String(userId));
+export const getOnlineUsers       = ()         => Array.from(onlineUsers);
+export const getOnlineUserCount   = ()         => onlineUsers.size;
+export const getUsersOnlineStatus = (userIds)  =>
     userIds.map(id => ({ userId: id, isOnline: onlineUsers.has(String(id)) }));
