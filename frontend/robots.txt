@@ -1,6 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /uploads/
-
-Sitemap: https://chatbymuaaz.online/sitemap.xml

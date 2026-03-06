@@ -1,189 +1,391 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- Primary Meta Tags -->
-    <title>ChatApp - Free Real-Time Messaging & Voice Chat | Sign In</title>
-    <meta name="title" content="ChatApp - Free Real-Time Messaging & Voice Chat | Sign In">
-    <meta name="description" content="Connect with friends instantly through ChatApp. Free real-time messaging, voice messages, and secure chat. Sign in or create your account today.">
-    <meta name="keywords" content="chat app, real-time messaging, voice chat, instant messaging, free chat, online chat, secure messaging, ChatByMuaaz">
-    <meta name="author" content="ChatByMuaaz">
-    <meta name="robots" content="index, follow">
-    
-    <!-- Canonical URL -->
-    <link rel="canonical" href="https://chatbymuaaz.online/">
-    <link rel="manifest" href="manifest.json">
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://chatbymuaaz.online/">
-    <meta property="og:title" content="ChatApp - Free Real-Time Messaging & Voice Chat">
-    <meta property="og:description" content="Connect with friends instantly through ChatApp. Free real-time messaging, voice messages, and secure chat.">
-    <meta property="og:image" content="https://chatbymuaaz.online/assets/og-image.png">
-    <meta property="og:site_name" content="ChatApp">
-    <meta property="og:locale" content="en_US">
-    
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="https://chatbymuaaz.online/">
-    <meta name="twitter:title" content="ChatApp - Free Real-Time Messaging & Voice Chat">
-    <meta name="twitter:description" content="Connect with friends instantly through ChatApp. Free real-time messaging, voice messages, and secure chat.">
-    <meta name="twitter:image" content="https://chatbymuaaz.online/assets/twitter-card.png">
-    
-    <!-- Favicon -->
-    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
-    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-    
-    <!-- Theme Color -->
-    <meta name="theme-color" content="#667eea">
-    <meta name="msapplication-TileColor" content="#667eea">
-    
-    <!-- Stylesheets -->
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="auth.css">
-    
-    <!-- Preconnect to API -->
-    <link rel="preconnect" href="https://api.chatbymuaaz.online">
-    <link rel="dns-prefetch" href="https://api.chatbymuaaz.online">
-    
-    <!-- Structured Data (JSON-LD) -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "ChatApp",
-      "alternateName": "ChatByMuaaz",
-      "url": "https://chatbymuaaz.online",
-      "description": "Free real-time messaging and voice chat application for connecting with friends instantly",
-      "applicationCategory": "CommunicationApplication",
-      "operatingSystem": "Web Browser",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "author": {
-        "@type": "Organization",
-        "name": "ChatByMuaaz"
-      },
-      "screenshot": "https://chatbymuaaz.online/assets/screenshot.png",
-      "featureList": [
-        "Real-time messaging",
-        "Voice messages",
-        "Online status",
-        "Secure chat",
-        "Free to use"
-      ]
-    }
-    </script>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+  <title>Muaaz Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
-    <div class="auth-container">
-        <div class="auth-card">
-            <div class="logo">
-                <h1>💬 ChatApp</h1>
-                <p>Connect with friends in real-time</p>
-            </div>
 
-            <!-- Login Form -->
-            <div id="loginForm" class="auth-form">
-                <h2>Sign In to ChatApp</h2>
-                <form id="login" aria-label="Login form">
-                    <div class="form-group">
-                        <label for="login-username">Username</label>
-                        <input 
-                            type="text" 
-                            id="login-username" 
-                            name="username"
-                            required 
-                            placeholder="Enter your username"
-                            autocomplete="username"
-                            aria-required="true">
-                    </div>
-                    <div class="form-group">
-                        <label for="login-password">Password</label>
-                        <input 
-                            type="password" 
-                            id="login-password" 
-                            name="password"
-                            required 
-                            placeholder="Enter your password"
-                            autocomplete="current-password"
-                            aria-required="true">
-                    </div>
-                    <button type="submit" class="btn-primary" aria-label="Sign in to your account">Sign In</button>
-                    <p class="error-message" id="login-error" role="alert" aria-live="polite"></p>
-                </form>
-                <p class="switch-form">
-                    Don't have an account? <a href="#register" id="showRegister" aria-label="Go to registration form">Register</a>
-                </p>
-            </div>
+<!-- ════════════════════════════════════
+  AUTH SCREENS
+════════════════════════════════════ -->
+<div id="authWrap" class="auth-wrap">
+  <div class="auth-bg">
+    <div class="ab-orb ab1"></div>
+    <div class="ab-orb ab2"></div>
+    <div class="ab-grid"></div>
+  </div>
 
-            <!-- Register Form -->
-            <div id="registerForm" class="auth-form" style="display: none;">
-                <h2>Create Your Account</h2>
-                <form id="register" aria-label="Registration form">
-                    <div class="form-group">
-                        <label for="register-name">Full Name</label>
-                        <input 
-                            type="text" 
-                            id="register-name" 
-                            name="name"
-                            required 
-                            placeholder="Enter your name"
-                            autocomplete="name"
-                            aria-required="true">
-                    </div>
-                    <div class="form-group">
-                        <label for="register-username">Username</label>
-                        <input 
-                            type="text" 
-                            id="register-username" 
-                            name="username"
-                            required 
-                            placeholder="Choose a username"
-                            autocomplete="username"
-                            aria-required="true">
-                    </div>
-                    <div class="form-group">
-                        <label for="register-email">Email</label>
-                        <input 
-                            type="email" 
-                            id="register-email" 
-                            name="email"
-                            required 
-                            placeholder="Enter your email"
-                            autocomplete="email"
-                            aria-required="true">
-                    </div>
-                    <div class="form-group">
-                        <label for="register-password">Password</label>
-                        <input 
-                            type="password" 
-                            id="register-password" 
-                            name="password"
-                            required 
-                            placeholder="Create a password"
-                            autocomplete="new-password"
-                            minlength="6"
-                            aria-required="true"
-                            aria-describedby="password-requirements">
-                        <small id="password-requirements" class="form-hint">Minimum 6 characters</small>
-                    </div>
-                    <button type="submit" class="btn-primary" aria-label="Create your account">Register</button>
-                    <p class="error-message" id="register-error" role="alert" aria-live="polite"></p>
-                </form>
-                <p class="switch-form">
-                    Already have an account? <a href="#login" id="showLogin" aria-label="Go to login form">Sign In</a>
-                </p>
-            </div>
-        </div>
+  <!-- LOGIN -->
+  <div class="auth-card" id="sLogin">
+    <div class="auth-brand">
+      <div class="auth-logo"><svg width="28" height="28" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="url(#g0)"/><path d="M10 20l7 7L30 13" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/><defs><linearGradient id="g0" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#4facfe"/><stop offset="1" stop-color="#00f2fe"/></linearGradient></defs></svg></div>
+      <span class="auth-appname">Muaaz Chat</span>
     </div>
-    
-    <script src="config.js"></script>
-    <script src="auth.js"></script>
+    <h2>Welcome back 👋</h2>
+    <p class="auth-sub">Sign in to your account</p>
+    <div class="field"><label>Username</label><div class="finput"><svg class="fi-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg><input id="l-u" type="text" placeholder="your_username" autocomplete="username"/></div></div>
+    <div class="field"><label>Password</label><div class="finput"><svg class="fi-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><input id="l-p" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/><button class="eye-btn" onclick="toggleEye('l-p',this)">👁</button></div></div>
+    <button class="btn-prim" onclick="doLogin()"><span>Sign In</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+    <div class="auth-links">
+      <a onclick="S('sRegister')">Create account</a>
+      <a onclick="S('sForgot')">Forgot password?</a>
+    </div>
+  </div>
+
+  <!-- REGISTER -->
+  <div class="auth-card hidden" id="sRegister">
+    <div class="auth-brand"><div class="auth-logo"><svg width="28" height="28" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="url(#g1)"/><path d="M10 20l7 7L30 13" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/><defs><linearGradient id="g1" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#4facfe"/><stop offset="1" stop-color="#00f2fe"/></linearGradient></defs></svg></div><span class="auth-appname">Muaaz Chat</span></div>
+    <h2>Create account ✨</h2>
+    <p class="auth-sub">Join and start chatting</p>
+    <div class="field-row">
+      <div class="field"><label>Full Name</label><div class="finput"><input id="r-n" type="text" placeholder="Muhammad Muaaz"/></div></div>
+      <div class="field"><label>Username</label><div class="finput"><input id="r-u" type="text" placeholder="muaaz_ali"/></div></div>
+    </div>
+    <div class="field"><label>Email</label><div class="finput"><input id="r-e" type="email" placeholder="muaaz@example.com"/></div></div>
+    <div class="field"><label>Password</label><div class="finput"><input id="r-p" type="password" placeholder="••••••••"/><button class="eye-btn" onclick="toggleEye('r-p',this)">👁</button></div></div>
+    <button class="btn-prim" onclick="doRegister()"><span>Create Account</span></button>
+    <div class="auth-links"><a onclick="S('sLogin')">← Back to sign in</a></div>
+  </div>
+
+  <!-- VERIFY EMAIL OTP -->
+  <div class="auth-card hidden" id="sVerify">
+    <div class="auth-icon-big">📧</div>
+    <h2>Check your email</h2>
+    <p class="auth-sub" id="verifyDesc">We sent a 6-digit code</p>
+    <div class="otp-row" id="otpRow">
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,0,'otpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,1,'otpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,2,'otpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,3,'otpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,4,'otpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,5,'otpRow')"/>
+    </div>
+    <button class="btn-prim" onclick="doVerifyOtp()">Verify Code</button>
+    <div class="auth-links"><a onclick="doResendOtp()">Resend code</a> &nbsp;·&nbsp; <a onclick="S('sLogin')">Cancel</a></div>
+  </div>
+
+  <!-- FORGOT PASSWORD -->
+  <div class="auth-card hidden" id="sForgot">
+    <div class="auth-icon-big">🔑</div>
+    <h2>Reset password</h2>
+    <p class="auth-sub">Enter your email to get a reset code</p>
+    <div class="field"><label>Email address</label><div class="finput"><input id="fp-e" type="email" placeholder="muaaz@example.com"/></div></div>
+    <button class="btn-prim" onclick="doForgotPassword()">Send Reset Code</button>
+    <div class="auth-links"><a onclick="S('sLogin')">← Back to sign in</a></div>
+  </div>
+
+  <!-- RESET PASSWORD -->
+  <div class="auth-card hidden" id="sReset">
+    <div class="auth-icon-big">🔒</div>
+    <h2>New password</h2>
+    <p class="auth-sub">Enter your OTP and choose a new password</p>
+    <div class="otp-row" id="resetOtpRow">
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,0,'resetOtpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,1,'resetOtpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,2,'resetOtpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,3,'resetOtpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,4,'resetOtpRow')"/>
+      <input class="otp-i" maxlength="1" type="text" inputmode="numeric" onkeyup="otpNav(this,5,'resetOtpRow')"/>
+    </div>
+    <div class="field" style="margin-top:12px"><label>New Password</label><div class="finput"><input id="rp-p" type="password" placeholder="••••••••"/><button class="eye-btn" onclick="toggleEye('rp-p',this)">👁</button></div></div>
+    <button class="btn-prim" onclick="doResetPassword()">Reset Password</button>
+  </div>
+
+  <div id="aToast" class="a-toast"></div>
+</div>
+
+
+<!-- ════════════════════════════════════
+  MAIN APP
+════════════════════════════════════ -->
+<div id="app" class="app hidden">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sb" id="sb">
+
+    <!-- Profile Header -->
+    <div class="sb-head">
+      <div class="sb-me" onclick="openSettings()">
+        <div class="av av-sm" id="sbAv" style="background:var(--acc)">?</div>
+        <div class="sb-me-info">
+          <span class="sb-me-name" id="sbName">User</span>
+          <span class="sb-me-plan" id="sbPlan">Free Plan</span>
+        </div>
+        <svg class="sb-me-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="sb-head-btns">
+        <button class="ib" onclick="openNewChat()" title="New chat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="sb-srch">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="sbSrch" type="text" placeholder="Search…" oninput="handleSbSearch()"/>
+    </div>
+
+    <!-- Nav tabs -->
+    <div class="sb-nav">
+      <button class="sn-tab active" data-t="chats" onclick="sbTab('chats')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Chats
+      </button>
+      <button class="sn-tab" data-t="friends" onclick="sbTab('friends')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Friends
+        <span class="nav-badge hidden" id="reqBadge">0</span>
+      </button>
+    </div>
+
+    <!-- Chats panel -->
+    <div class="sb-panel" id="pChats">
+      <div class="chat-list" id="chatList"><div class="list-spin"><div class="spin"></div></div></div>
+    </div>
+
+    <!-- Friends panel -->
+    <div class="sb-panel hidden" id="pFriends">
+      <div class="fp-tabs">
+        <button class="fp-tab active" onclick="fpTab('mine')">My Friends</button>
+        <button class="fp-tab" onclick="fpTab('reqs')">Requests</button>
+        <button class="fp-tab" onclick="fpTab('add')">+ Add</button>
+      </div>
+      <div id="fp-mine"><div class="chat-list" id="friendList"><div class="list-spin"><div class="spin"></div></div></div></div>
+      <div id="fp-reqs" class="hidden"><div class="chat-list" id="reqList"><div class="list-spin"><div class="spin"></div></div></div></div>
+      <div id="fp-add" class="hidden">
+        <div class="add-friend-wrap">
+          <p class="af-hint">Search by username</p>
+          <div class="finput"><svg class="fi-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input id="afInput" type="text" placeholder="username…" onkeydown="if(event.key==='Enter')doAddFriend()"/></div>
+          <button class="btn-prim sm" onclick="doAddFriend()">Send Request</button>
+          <div id="afResult"></div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main class="main" id="main">
+
+    <!-- Welcome -->
+    <div class="welcome" id="welcome">
+      <div class="wlc-inner">
+        <div class="wlc-logo"><svg width="80" height="80" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="url(#gw)" opacity=".15"/><path d="M10 20l7 7L30 13" stroke="#4facfe" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><defs><linearGradient id="gw" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#4facfe"/><stop offset="1" stop-color="#00f2fe"/></linearGradient></defs></svg></div>
+        <h2>Muaaz Chat</h2>
+        <p>Select a chat to start messaging</p>
+        <button class="btn-outline" onclick="openNewChat()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> New Chat</button>
+      </div>
+    </div>
+
+    <!-- Chat window -->
+    <div class="cwin hidden" id="cwin">
+
+      <!-- Chat header -->
+      <div class="cw-head">
+        <button class="ib mob-back" onclick="closeCwin()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <div class="av av-sm" id="cwAv"></div>
+        <div class="cw-head-info">
+          <span class="cw-name" id="cwName">—</span>
+          <span class="cw-sub" id="cwSub">—</span>
+        </div>
+        <div class="cw-head-actions">
+          <button class="ib" onclick="refreshMsgs()" title="Refresh"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div class="msgs" id="msgs"></div>
+
+      <!-- ① INPUT BAR -->
+      <div class="input-bar" id="inputBar">
+        <button class="emoji-toggle ib" onclick="toggleEmoji()" title="Emoji">😊</button>
+        <div class="ib-field">
+          <textarea
+            id="msgTa"
+            rows="1"
+            placeholder="Type a message…"
+            oninput="taResize(this)"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTextMsg()}"
+          ></textarea>
+        </div>
+        <!-- Mic button — click to START recording -->
+        <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Voice message">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8"  y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+        <button class="send-btn" onclick="sendTextMsg()" title="Send">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2 21 23 12 2 3v7l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- ② RECORDING BAR — shown when recording starts -->
+      <div class="rec-bar hidden" id="recBar">
+        <div class="rec-dot"></div>
+        <span class="rec-time" id="recTime">0:00</span>
+        <span class="rec-hint">Recording… tap stop to send</span>
+        <!-- STOP button — stops recording AND sends the audio -->
+        <button class="stop-btn" onclick="stopAndSendRecording()" title="Stop &amp; Send">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+          </svg>
+        </button>
+        <!-- CANCEL button — discards the recording -->
+        <button class="rec-cancel" onclick="cancelRecording()">✕ Cancel</button>
+      </div>
+
+      <!-- ③ EMOJI BAR -->
+      <div class="emoji-bar hidden" id="emojiBar">
+        😀 😂 😍 🥰 😎 🤔 😅 🙏 👍 🔥 ❤️ 💯 🎉 😭 🤣 😊 🥺 😏 👀 💀
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Mobile overlay + toggle -->
+  <div class="sb-overlay hidden" id="sbOverlay" onclick="closeSb()"></div>
+  <button class="fab hidden" id="fab" onclick="toggleSb()">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+</div>
+
+
+<!-- ════════════════════════════════════
+  MODALS
+════════════════════════════════════ -->
+<!-- Generic modal -->
+<div class="modal-wrap hidden" id="mWrap" onclick="mOutside(event)">
+  <div class="modal" id="mBox">
+    <div class="modal-head"><span id="mTitle"></span><button class="ib" onclick="closeM()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" id="mBody"></div>
+  </div>
+</div>
+
+<!-- SETTINGS DRAWER -->
+<div class="drawer-wrap hidden" id="drawerWrap" onclick="drawerOutside(event)">
+  <div class="drawer" id="drawer">
+
+    <!-- Profile section -->
+    <div class="drawer-head">
+      <button class="ib" onclick="closeDrawer()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span>Settings</span>
+    </div>
+
+    <div class="drawer-scroll">
+
+      <!-- Profile card -->
+      <div class="prof-card">
+        <div class="prof-av-wrap">
+          <div class="av av-xl" id="drAv"></div>
+          <button class="av-edit-btn" onclick="triggerAvatarUpload()" title="Change photo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </button>
+          <input type="file" id="avatarFile" accept="image/*" class="hidden" onchange="uploadAvatar(this)"/>
+        </div>
+        <div class="prof-info">
+          <h3 id="drName">User</h3>
+          <p id="drUsername">@username</p>
+          <p id="drEmail">email</p>
+        </div>
+        <button class="btn-sm-outline" onclick="openEditProfile()">Edit Profile</button>
+      </div>
+
+      <!-- Subscription card -->
+      <div class="sub-card" id="subCard">
+        <div class="sub-card-left">
+          <div class="sub-badge" id="subBadge">FREE</div>
+          <div>
+            <div class="sub-plan-name" id="subPlanName">Free Plan</div>
+            <div class="sub-plan-desc" id="subPlanDesc">Basic features</div>
+          </div>
+        </div>
+        <button class="btn-upgrade" onclick="openPlans()">Upgrade ✨</button>
+      </div>
+
+      <!-- Settings sections -->
+      <div class="settings-list">
+
+        <div class="sl-section">
+          <div class="sl-title">Account</div>
+          <div class="sl-item" onclick="openChangePassword()">
+            <div class="sl-icon">🔑</div>
+            <div class="sl-text"><span>Change Password</span><small>Update your password securely</small></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="sl-item" onclick="openChangeUsername()">
+            <div class="sl-icon">✏️</div>
+            <div class="sl-text"><span>Change Username</span><small id="curUsername">@username</small></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="sl-item" onclick="toggleTwoFA()">
+            <div class="sl-icon">🛡️</div>
+            <div class="sl-text"><span>Two-Factor Auth</span><small id="twoFaStatus">Status unknown</small></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+
+        <div class="sl-section">
+          <div class="sl-title">Subscription</div>
+          <div class="sl-item" onclick="openPlans()">
+            <div class="sl-icon">💳</div>
+            <div class="sl-text"><span>View Plans</span><small>Explore available plans</small></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="sl-item" onclick="openBillingPortal()">
+            <div class="sl-icon">🧾</div>
+            <div class="sl-text"><span>Billing & Invoices</span><small>Manage billing portal</small></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="sl-item" id="cancelResumeItem" onclick="toggleSubscription()">
+            <div class="sl-icon">⏸️</div>
+            <div class="sl-text"><span id="cancelResumeLabel">Cancel Subscription</span><small>Manage your plan</small></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+
+        <div class="sl-section">
+          <div class="sl-title">Notifications</div>
+          <div class="sl-item" onclick="enablePushNotifications()">
+            <div class="sl-icon">🔔</div>
+            <div class="sl-text"><span>Push Notifications</span><small id="pushStatus">Click to enable</small></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+
+        <div class="sl-section">
+          <div class="sl-title">More</div>
+          <div class="sl-item" onclick="openGroupCreate()">
+            <div class="sl-icon">👥</div>
+            <div class="sl-text"><span>Create Group Chat</span><small>Start a group conversation</small></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="sl-item logout" onclick="doLogout()">
+            <div class="sl-icon">🚪</div>
+            <div class="sl-text"><span>Sign Out</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /drawer-scroll -->
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/voice.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
