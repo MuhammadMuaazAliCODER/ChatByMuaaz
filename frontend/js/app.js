@@ -1403,12 +1403,20 @@ function hideRecBar() {
 async function uploadAudio(blob) {
   if (!APP.currentChatId) return;
   const fd = new FormData();
-  fd.append('audio', blob, 'voice.webm');
+  fd.append('audio', blob, 'voice.webm'); // Ensure the blob is passed correctly
   fd.append('chatId', APP.currentChatId);
   fd.append('type', 'audio');
-  const r = await API.sendMessage(fd);
-  if (r.ok) { APP._lastIds.clear(); await loadMessages(); loadChats(); }
-  else toast('Failed to send audio', 'err');
+
+  // Use the correct API method to send the FormData
+  const r = await API.voicemessage(fd); // Update to use the voicemessage method
+
+  if (r.ok) {
+    APP._lastIds.clear();
+    await loadMessages();
+    loadChats();
+  } else {
+    toast('Failed to send audio', 'err');
+  }
 }
 
 // ── LOGOUT ────────────────────────────────────────────

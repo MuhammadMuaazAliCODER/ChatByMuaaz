@@ -113,7 +113,7 @@ async function sendVoiceMessage(blobUrl, duration, base64Data) {
 
   // We send it as an audio type message, content holds the duration label
   // In production you'd upload the audio file and send the URL
-  const res = await API.sendMessage({
+  const res = await API.voicemessage({
     chatId: APP.currentChatId,
     content: `🎤 Voice message (${durationStr})`,
     type: 'audio',

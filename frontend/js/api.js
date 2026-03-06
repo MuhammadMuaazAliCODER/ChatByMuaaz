@@ -20,6 +20,36 @@ const API = (() => {
     }
   }
 
+  async function voicemessage(data) {
+    return r('POST', `/upload/audio`, data, true); // Set isForm to true
+  }
+
+  async function sendVoiceMessage(blobUrl, duration, base64Data) {
+    if (!APP.currentChatId) return;
+    const durationStr = formatDuration(duration);
+
+    // Create a FormData object to send the audio file
+    const formData = new FormData();
+    formData.append('audio', base64Data); // Append the audio data with the field name 'audio'
+
+    // Send the audio message
+    const res = await API.voicemessage({
+      chatId: APP.currentChatId,
+      content: `🎤 Voice message (${durationStr})`,
+      type: 'audio',
+      audioUrl: blobUrl, // local blob URL - works for same session
+      audioData: formData // Include the FormData with audio
+    });
+
+    if (res.ok) {
+      APP._lastIds.clear();
+      await loadMessages();
+      loadChats();
+    } else {
+      toast(res.data?.message || 'Failed to send voice', 'err');
+    }
+  }
+
   return {
     set, get,
     get_:   p     => r('GET',    p),
@@ -64,8 +94,7 @@ const API = (() => {
     sendMessage:          b          => r('POST', '/messages', b),
     markRead:             id         => r('PUT',  `/messages/${id}/read`),
     markAllRead:          id         => r('PUT',  `/messages/chat/${id}/read`),
-    deleteMsg:            id         => r('DELETE', `/messages/${id}`),
-
+    
     // Push
     getVapidKey:          () => r('GET',  '/push/vapid-public-key'),
     subscribePush:        b  => r('POST', '/push/subscribe', b),
