@@ -17,7 +17,7 @@ import friendRoutes from './routes/friendRequest.route.js';
 import friend from './routes/friend.routes.js';
 import emailRoutes from "./routes/email.routes.js";
 import pushroutes from "./routes/push.routes.js"
-
+import audioroutes from "./routes/upload.routes.js";
 import subscriptionRoutes from './routes/subscription.routes.js';
 
 const app = express();
@@ -58,7 +58,7 @@ app.use('/api/friend', friendRoutes);
 app.use('/api/friends', friend);
 app.use("/api/email", emailRoutes);
 app.use("/api/push",pushroutes)
-
+app.use("/api/upload", audioroutes);
 app.use('/api/subscription', subscriptionRoutes);
 
 // Health check endpoint

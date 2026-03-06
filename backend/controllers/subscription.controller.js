@@ -115,8 +115,8 @@ class SubscriptionController {
             quantity: 1
           }
         ],
-        success_url: FRONTEND_URL,
-cancel_url: FRONTEND_URL,
+        success_url: "http://localhost:3000/",
+cancel_url: "http://localhost:3000/",
         metadata: {
           userId: user._id.toString(),
           planType

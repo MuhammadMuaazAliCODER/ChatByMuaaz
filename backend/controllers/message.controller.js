@@ -47,6 +47,12 @@ export const sendMessage = async (req, res) => {
         chat.updatedAt = new Date();
         await chat.save();
 
+        // ✅ FIX: Count this message toward the user's monthly limit
+        // Must be called AFTER message is successfully saved
+        if (req.countMessage) {
+            await req.countMessage();
+        }
+
         // Get recipient (other participant)
         const recipient = chat.participants.find(
             p => p._id.toString() !== senderId.toString()
@@ -67,7 +73,9 @@ export const sendMessage = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: message
+            message: message,
+            // ✅ FIX: Include usage info so frontend can show limit warnings
+            usage: req.usageInfo || null
         });
     } catch (error) {
         console.error('Error sending message:', error);
