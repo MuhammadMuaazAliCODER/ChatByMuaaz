@@ -171,11 +171,16 @@ export const sendToUser = (userId, data) => {
  * @param {number}   [unreadCount]  - The recipient's current unread count for this chat (optional)
  */
 export const sendMessageNotification = async (recipientIds, messageData, unreadCount = 1) => {
+    // Guard: accept both a single userId string and an array of userIds.
+    // Without this, iterating a plain string loops over each character ("6","8","a"…)
+    // which causes Mongoose CastErrors when those single chars hit the DB.
+    const ids = Array.isArray(recipientIds) ? recipientIds : [recipientIds];
+
     const senderName   = messageData.sender?.name || messageData.sender?.username || 'Someone';
     const senderAvatar = messageData.sender?.profilePicture || '';
     const preview      = messageData.type === 'audio' ? '🎤 Voice message' : (messageData.content || '');
 
-    for (const recipientId of recipientIds) {
+    for (const recipientId of ids) {
         const id       = String(recipientId);
         const isOnline = onlineUsers.has(id);
 

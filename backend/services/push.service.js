@@ -78,7 +78,15 @@ export const sendPushNotification = async (userId, payload) => {
         return;
     }
 
-    const subscriptions = await getUserSubscriptions(userId);
+    // Guard: reject anything that isn't a valid 24-char hex MongoDB ObjectId.
+    // This prevents CastErrors if a plain string or iterated character is passed in.
+    const id = String(userId);
+    if (!/^[a-f\d]{24}$/i.test(id)) {
+        console.warn(`[Push] Skipping invalid userId: "${id}"`);
+        return;
+    }
+
+    const subscriptions = await getUserSubscriptions(id);
     if (!subscriptions.length) return;
 
     const notifPayload = JSON.stringify({
@@ -111,7 +119,7 @@ export const sendPushNotification = async (userId, payload) => {
 
     const sent   = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
-    if (sent)   console.log(`[Push] Sent to ${sent}/${subscriptions.length} devices for user ${userId}`);
+    if (sent)   console.log(`[Push] Sent to ${sent}/${subscriptions.length} devices for user ${id}`);
     if (failed) console.warn(`[Push] Failed for ${failed} devices`);
 };
 
