@@ -100,22 +100,33 @@ textarea{resize:none;line-height:1.55}
 .btn-sm-outline:hover{background:var(--acc-dim)}
 
 .a-toast{
-  position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);
+  position:fixed;bottom:calc(20px + env(safe-area-inset-bottom, 0px));left:50%;
+  transform:translateX(-50%) translateY(60px);
   background:var(--surface);border:1px solid var(--bdr);border-radius:10px;
-  color:var(--txt);font-size:13px;font-weight:500;padding:9px 18px;
-  opacity:0;transition:transform .3s,opacity .3s;z-index:9999;pointer-events:none;white-space:nowrap
+  color:var(--txt);font-size:13px;font-weight:500;padding:10px 18px;
+  opacity:0;transition:transform .3s,opacity .3s;z-index:9999;pointer-events:none;
+  white-space:normal;text-align:center;
+  max-width:calc(100vw - 32px);width:max-content;line-height:1.45
 }
 .a-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .a-toast.err{border-color:var(--red);color:var(--red)}
 .a-toast.ok{border-color:var(--green);color:var(--green)}
 
 /* ── APP LAYOUT ─────────────────────────────────── */
-.app{display:flex;height:100vh;overflow:hidden}
+.app{
+  display:flex;
+  height:100vh;
+  height:100dvh;
+  overflow:hidden;
+}
 
 /* ── SIDEBAR ──────────────────────────────────────*/
 .sb{
   width:var(--sb);background:var(--bg2);border-right:1px solid var(--bdr);
-  display:flex;flex-direction:column;flex-shrink:0;height:100vh;overflow:hidden;
+  display:flex;flex-direction:column;flex-shrink:0;
+  height:100vh;
+  height:100dvh;
+  overflow:hidden;
   transition:transform .25s cubic-bezier(.4,0,.2,1);z-index:50
 }
 
@@ -193,12 +204,9 @@ textarea{resize:none;line-height:1.55}
 .av-xl{width:70px;height:70px;font-size:26px}
 
 /* ── MAIN / CHAT ─────────────────────────────────*/
-.main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow:hidden}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;height:100dvh;overflow:hidden}
 
-/* ── WELCOME SCREEN ─────────────────────────────
-   On desktop: shows when no chat is open.
-   On mobile:  ALWAYS hidden — sidebar IS the default view.
-*/
+/* ── WELCOME SCREEN ──────────────────────────────*/
 .welcome{
   flex:1;display:flex;align-items:center;justify-content:center;
   background:var(--bg);
@@ -209,7 +217,12 @@ textarea{resize:none;line-height:1.55}
 .wlc-inner h2{font-size:22px;font-weight:800;margin-bottom:6px}
 .wlc-inner p{color:var(--txt2);font-size:13px;margin-bottom:18px}
 
-.cwin{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.cwin{
+  flex:1;display:flex;flex-direction:column;
+  height:100vh;
+  height:100dvh;
+  overflow:hidden;
+}
 
 .cw-head{
   display:flex;align-items:center;gap:10px;
@@ -225,6 +238,7 @@ textarea{resize:none;line-height:1.55}
 .msgs{
   flex:1;overflow-y:auto;padding:14px 16px 8px;
   display:flex;flex-direction:column;gap:3px;
+  min-height:0;
   background:var(--bg);
   background-image:
     radial-gradient(ellipse at 15% 85%,rgba(79,172,254,.03),transparent 50%),
@@ -275,8 +289,12 @@ textarea{resize:none;line-height:1.55}
 /* ── INPUT BAR ───────────────────────────────────*/
 .input-bar{
   display:flex;align-items:flex-end;gap:6px;
-  padding:10px 12px 12px;
-  background:var(--bg2);border-top:1px solid var(--bdr);flex-shrink:0
+  padding:10px 12px;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+  background:var(--bg2);border-top:1px solid var(--bdr);flex-shrink:0;
+  /* Ensure it's never pushed off screen */
+  position:relative;
+  z-index:1;
 }
 .emoji-toggle{font-size:19px;flex-shrink:0;cursor:pointer;padding:4px;border-radius:7px;transition:background .15s;background:none;border:none;color:var(--txt2)}
 .emoji-toggle:hover{background:var(--bgh)}
@@ -308,7 +326,6 @@ textarea{resize:none;line-height:1.55}
   50%{box-shadow:0 0 0 6px rgba(255,107,114,0)}
 }
 
-/* Stop recording button (shown while recording is active) */
 .stop-btn{
   width:38px;height:38px;flex-shrink:0;
   background:rgba(255,107,114,.15);
@@ -340,6 +357,7 @@ textarea{resize:none;line-height:1.55}
 .rec-bar{
   display:flex;align-items:center;gap:10px;
   padding:10px 14px;
+  padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));
   background:rgba(255,107,114,.08);
   border-top:1px solid rgba(255,107,114,.18);
   flex-shrink:0
@@ -365,6 +383,7 @@ textarea{resize:none;line-height:1.55}
 /* ── EMOJI BAR ───────────────────────────────────*/
 .emoji-bar{
   display:flex;flex-wrap:wrap;gap:2px;padding:8px 12px;
+  padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
   background:var(--bg2);border-top:1px solid var(--bdr);flex-shrink:0;font-size:22px
 }
 .emoji-bar span{cursor:pointer;padding:4px;border-radius:7px;transition:background .1s}
@@ -457,13 +476,25 @@ textarea{resize:none;line-height:1.55}
 .spin{width:22px;height:22px;border-radius:50%;border:2px solid var(--bdr);border-top-color:var(--acc);animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Toast */
+/* ── TOAST ───────────────────────────────────────*/
 .toast{
-  position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(60px);
+  position:fixed;
+  bottom:calc(22px + env(safe-area-inset-bottom, 0px));
+  left:50%;
+  transform:translateX(-50%) translateY(60px);
   background:var(--surface);border:1px solid var(--bdr);border-radius:11px;
-  color:var(--txt);font-size:13px;font-weight:500;padding:9px 18px;
-  z-index:9999;opacity:0;transition:transform .3s,opacity .3s;
-  pointer-events:none;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)
+  color:var(--txt);font-size:13px;font-weight:500;
+  padding:10px 18px;
+  z-index:9999;opacity:0;
+  transition:transform .3s,opacity .3s;
+  pointer-events:none;
+  /* Responsive fixes */
+  white-space:normal;
+  text-align:center;
+  max-width:calc(100vw - 32px);
+  width:max-content;
+  line-height:1.45;
+  box-shadow:0 8px 24px rgba(0,0,0,.4)
 }
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .toast.ok{border-color:var(--green);color:var(--green)}
@@ -476,7 +507,9 @@ textarea{resize:none;line-height:1.55}
 /* ── MOBILE OVERLAY & FAB ────────────────────────*/
 .sb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;backdrop-filter:blur(2px)}
 .fab{
-  position:fixed;bottom:-2px;right:8px;
+  position:fixed;
+  bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+  right:8px;
   width:50px;height:50px;border-radius:50%;
   background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;
   color:#071525;cursor:pointer;display:flex;align-items:center;justify-content:center;
@@ -499,7 +532,9 @@ textarea{resize:none;line-height:1.55}
 
   /* Sidebar slides in over the top, hidden by default */
   .sb{
-    position:fixed;left:0;top:0;height:100vh;
+    position:fixed;left:0;top:0;
+    height:100vh;
+    height:100dvh;
     transform:translateX(-100%);z-index:50;
     width:84vw;max-width:300px;
     box-shadow:none
@@ -512,12 +547,14 @@ textarea{resize:none;line-height:1.55}
   /* Main area fills full screen */
   .main{width:100vw}
 
-  /* Welcome screen is hidden via JS on mobile (closeCwin opens sidebar instead) */
-
   /* Chat window fills full screen when open */
   .cwin{
     position:fixed;inset:0;z-index:30;
-    background:var(--bg)
+    background:var(--bg);
+    height:100vh;
+    height:100dvh;
+    display:flex;
+    flex-direction:column;
   }
 
   /* Back button visible on mobile */
@@ -526,8 +563,12 @@ textarea{resize:none;line-height:1.55}
   /* FAB always visible on mobile */
   .fab{display:flex!important}
 
-  /* Messages take less side padding on small screens */
-  .msgs{padding:10px 10px 6px}
+  /* Messages area fills remaining space, scrollable */
+  .msgs{
+    flex:1;
+    min-height:0;
+    padding:10px 10px 6px;
+  }
 
   /* Messages can go wider */
   .mb{max-width:82%}
@@ -537,7 +578,7 @@ textarea{resize:none;line-height:1.55}
   .mb-out .mb-del{right:auto;left:-24px}
 
   /* Input bar tweaks */
-  .input-bar{padding:8px 8px 10px;gap:5px}
+  .input-bar{padding:8px 8px;padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));gap:5px}
   .ib-field textarea{font-size:15px}
 
   /* Auth */
@@ -562,14 +603,15 @@ textarea{resize:none;line-height:1.55}
   .mic-btn,.stop-btn{width:34px;height:34px}
   .voice-bubble{min-width:130px}
   .rec-time{font-size:13px}
+  .toast{font-size:12px;padding:8px 14px;max-width:calc(100vw - 20px)}
+  .a-toast{font-size:12px;padding:8px 14px;max-width:calc(100vw - 20px)}
 }
 
-.mb-del , .mb-del {display: none!important;}
-
+.mb-del,.mb-del{display:none!important}
 
 #fp-mine,
-#fp-reqs {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
+#fp-reqs{
+  flex:1;
+  overflow-y:auto;
+  min-height:0;
 }
