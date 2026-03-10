@@ -82,7 +82,7 @@ const API = (() => {
     sendFriendReq:        b  => r('POST', '/friend/send', b),
     getIncomingReqs:      () => r('GET',  '/friend/incoming'),
     respondReq:           b  => r('POST', '/friend/respond', b),
-    getMyFriends:         () => r('GET',  '/friends/friends'),
+    getMyFriends:         () => r('GET',  '/friends'),
 
     // Chats
     getChats:             () => r('GET',  '/chats'),
@@ -94,7 +94,8 @@ const API = (() => {
     sendMessage:          b          => r('POST', '/messages', b),
     markRead:             id         => r('PUT',  `/messages/${id}/read`),
     markAllRead:          id         => r('PUT',  `/messages/chat/${id}/read`),
-voicemessage: (formData) => r('POST', '/upload/audio', formData, true),
+voicemessage:     fd => r('POST', '/upload/audio', fd, true),
+sendAudioMessage: b  => r('POST', '/messages', b),
     // Push
     getVapidKey:          () => r('GET',  '/push/vapid-public-key'),
     subscribePush:        b  => r('POST', '/push/subscribe', b),

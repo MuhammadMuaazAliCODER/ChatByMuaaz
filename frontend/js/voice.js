@@ -1,10 +1,15 @@
+const btn =  getElementById('micBtn');
+btn.addEventListener('click',() =>{
+    toast('Auio recording feature is currently in testing and may not work perfectly. Please try again later.', 'info');
+});
+
 // ── VOICE RECORDING MODULE ───────────────────────────
 const VOICE = (() => {
-  let mediaRecorder = null;
-  let audioChunks = [];
-  let timerInterval = null;
-  let secondsElapsed = 0;
-  let isRecording = false;
+  let mediaRecorder    = null;
+  let audioChunks      = [];
+  let timerInterval    = null;
+  let secondsElapsed   = 0;
+  let isRecording      = false;
 
   function fmtTime(s) {
     const m = Math.floor(s / 60);
@@ -13,39 +18,49 @@ const VOICE = (() => {
 
   async function start() {
     if (!navigator.mediaDevices?.getUserMedia) {
-      toast('Microphone not supported in this browser', 'err'); return false;
+      toast('Microphone not supported in this browser', 'err');
+      return false;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunks = [];
-      secondsElapsed = 0;
+      audioChunks      = [];
+      secondsElapsed   = 0;
+      mediaRecorder    = new MediaRecorder(stream);
 
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-
-      mediaRecorder.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-        onRecordingComplete(blob);
+      // Collect chunks every 250ms — prevents empty buffer on stop
+      mediaRecorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) audioChunks.push(e.data);
       };
 
-      mediaRecorder.start();
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        if (!blob || blob.size === 0) {
+          toast('Recording was empty, please try again', 'err');
+          return;
+        }
+        await _uploadAudio(blob);
+      };
+
+      mediaRecorder.start(250); // 250ms timeslice — key fix
       isRecording = true;
 
-      // Update UI
+      // Show recording UI
       document.getElementById('recBar').classList.remove('hidden');
       document.getElementById('inputBar').classList.add('hidden');
       document.getElementById('micBtn').classList.add('recording');
 
       timerInterval = setInterval(() => {
         secondsElapsed++;
-        document.getElementById('recTime').textContent = fmtTime(secondsElapsed);
-        if (secondsElapsed >= 120) stopAndSend(); // max 2 min
+        const el = document.getElementById('recTime');
+        if (el) el.textContent = fmtTime(secondsElapsed);
+        if (secondsElapsed >= 120) stop(); // max 2 min
       }, 1000);
 
       return true;
     } catch (err) {
-      toast('Microphone access denied', 'err'); return false;
+      toast('Microphone access denied', 'err');
+      return false;
     }
   }
 
@@ -54,75 +69,83 @@ const VOICE = (() => {
       mediaRecorder.stop();
       isRecording = false;
       clearInterval(timerInterval);
-      resetUI();
+      _resetUI();
     }
   }
 
   function cancel() {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.onstop = null; // prevent sending
-      mediaRecorder.stop();
-      isRecording = false;
-      clearInterval(timerInterval);
-      resetUI();
-      toast('Recording cancelled');
+    if (mediaRecorder) {
+      mediaRecorder.onstop = () => {
+        // Override — discard audio, just stop the stream
+        if (mediaRecorder?.stream) {
+          mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
+      };
+      if (isRecording) mediaRecorder.stop();
     }
+    audioChunks    = [];
+    isRecording    = false;
+    clearInterval(timerInterval);
+    _resetUI();
+    toast('Recording cancelled');
   }
 
-  function resetUI() {
+  function _resetUI() {
     document.getElementById('recBar').classList.add('hidden');
     document.getElementById('inputBar').classList.remove('hidden');
     document.getElementById('micBtn').classList.remove('recording');
-    document.getElementById('recTime').textContent = '0:00';
+    const el = document.getElementById('recTime');
+    if (el) el.textContent = '0:00';
   }
 
-  // Convert blob to base64 and send as audio message
-// REPLACE onRecordingComplete with this:
-async function onRecordingComplete(blob) {
-  await uploadAudio(blob); // directly pass blob — no base64 needed
-}
+  async function _uploadAudio(blob) {
+    if (!APP.currentChatId) return;
+    if (!blob || blob.size === 0) {
+      toast('Recording was empty, please try again', 'err');
+      return;
+    }
 
-// REMOVE sendVoiceMessage entirely — it's no longer used
+    const fd = new FormData();
+    fd.append('audio',  blob, 'voice.webm');
+    fd.append('chatId', APP.currentChatId);
+    fd.append('type',   'audio');
+
+    const r = await API.voicemessage(fd);
+    if (r.ok) {
+      APP._lastIds.clear();
+      await loadMessages();
+      loadChats();
+    } else {
+      toast(r.data?.message || 'Failed to send audio', 'err');
+    }
+  }
 
   return {
-    start, stop, cancel,
+    start,
+    stop,
+    cancel,
     isRecording: () => isRecording,
   };
 })();
 
-// Exposed to HTML
-function toggleRecording() {
+
+// ── GLOBAL FUNCTIONS CALLED FROM HTML ────────────────
+
+// Called by mic button in input bar
+function toggleMic() {
   if (VOICE.isRecording()) {
     VOICE.stop();
   } else {
     VOICE.start();
   }
 }
-function cancelRecording() { VOICE.cancel(); }
 
-async function sendVoiceMessage(blobUrl, duration, base64Data) {
-  if (!APP.currentChatId) return;
-  const durationStr = formatDuration(duration);
-
-  // We send it as an audio type message, content holds the duration label
-  // In production you'd upload the audio file and send the URL
-  const res = await API.voicemessage({
-    chatId: APP.currentChatId,
-    content: `🎤 Voice message (${durationStr})`,
-    type: 'audio',
-    audioUrl: blobUrl, // local blob URL - works for same session
-  });
-
-  if (res.ok) {
-    APP._lastIds.clear();
-    await loadMessages();
-    loadChats();
-  } else {
-    toast(res.data?.message || 'Failed to send voice', 'err');
-  }
+// Called by stop button in rec bar
+function stopAndSendRecording() {
+  VOICE.stop();
 }
 
-function formatDuration(secs) {
-  const m = Math.floor(secs / 60);
-  return m > 0 ? `${m}m ${secs % 60}s` : `${secs}s`;
+// Called by cancel button in rec bar
+function cancelRecording() {
+  VOICE.cancel();
 }

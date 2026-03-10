@@ -1,37 +1,37 @@
-// controllers/upload.controller.js
 import cloudinary from '../config/cloudinary.js';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /upload/audio
-// Accepts a single audio file (field name: 'audio')
-// Streams it to Cloudinary and returns the secure URL.
-//
-// Used by the frontend before sending a voice message:
-//   1. Upload blob → get Cloudinary URL
-//   2. Send message with type:'audio' and audioUrl: <cloudinary url>
-// ─────────────────────────────────────────────────────────────────────────────
 export const uploadAudio = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No audio file provided' });
     }
 
-    console.log(req.file, req.file.buffer);
+    if (!req.file.buffer || req.file.buffer.length === 0) {
+      return res.status(400).json({ success: false, message: 'Empty file' });
+    }
 
-    // Stream the buffer directly to Cloudinary (no temp file on disk)
+    console.log('Uploading audio, size:', req.file.size, 'bytes');
+
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
-          resource_type: 'video', // Cloudinary uses 'video' for audio files
+          resource_type: 'video',
           folder: 'chat_audio',
           format: 'webm',
-          transformation: [{ quality: 'auto' }]
+          timeout: 120000,          // ← 2 minute timeout
+          chunk_size: 6000000,      // ← 6MB chunks for reliability
         },
         (error, result) => {
           if (error) reject(error);
           else resolve(result);
         }
       );
+
+      // Kill promise if stream hangs
+      const timer = setTimeout(() => reject(new Error('Request Timeout')), 110000);
+      stream.on('finish', () => clearTimeout(timer));
+      stream.on('error', (err) => { clearTimeout(timer); reject(err); });
+
       stream.end(req.file.buffer);
     });
 
@@ -49,5 +49,8 @@ export const uploadAudio = async (req, res) => {
       message: 'Failed to upload audio',
       error: error.message
     });
-  }
+  }const btn =  getElementById('micBtn');
+btn.addEventListener('click',() =>{
+    toast('Auio recording feature is currently in testing and may not work perfectly. Please try again later.', 'info');
+});
 };

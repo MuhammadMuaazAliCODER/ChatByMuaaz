@@ -9,12 +9,8 @@ const APP = {
   subStatus: null,
   pollTimer: null,
   _lastIds: new Set(),
-  // Cache: userId -> full user object (has profilePicture, online, name, username)
-  // IMPORTANT: `online` is ONLY ever set by WebSocket events, never by REST API responses
   _userCache: {},
-  // Unread message counts per chatId — driven by WS events + API responses
   _unreadCounts: {},
-  // Total unread across all chats (shown in sidebar toggle button)
   _totalUnread: 0,
 };
 
@@ -25,109 +21,72 @@ let _wsReconnectTimer = null;
 function connectWS() {
   const token = API.get();
   if (!token) return;
-
   clearTimeout(_wsReconnectTimer);
-
   try {
     _ws = new WebSocket(`ws://localhost:5300?token=${token}`);
   } catch (e) {
     console.error('WS init failed:', e);
     return;
   }
-
-  _ws.onopen = () => {
-    console.log('[WS] Connected');
-  };
-
+  _ws.onopen = () => { console.log('[WS] Connected'); };
   _ws.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      handleWSMessage(data);
-    } catch (err) {
-      console.error('[WS] Parse error:', err);
-    }
+    try { const data = JSON.parse(e.data); handleWSMessage(data); }
+    catch (err) { console.error('[WS] Parse error:', err); }
   };
-
   _ws.onclose = () => {
     console.log('[WS] Disconnected — reconnecting in 3s...');
     _ws = null;
-    if (API.get()) {
-      _wsReconnectTimer = setTimeout(connectWS, 3000);
-    }
+    if (API.get()) _wsReconnectTimer = setTimeout(connectWS, 3000);
   };
-
-  _ws.onerror = (err) => {
-    console.error('[WS] Error:', err);
-  };
+  _ws.onerror = (err) => { console.error('[WS] Error:', err); };
 }
 
 function disconnectWS() {
   clearTimeout(_wsReconnectTimer);
-  if (_ws) {
-    _ws.onclose = null;
-    _ws.close();
-    _ws = null;
-  }
+  if (_ws) { _ws.onclose = null; _ws.close(); _ws = null; }
 }
 
 function handleWSMessage(data) {
   switch (data.type) {
 
     case 'online_users':
-      Object.keys(APP._userCache).forEach(id => {
-        APP._userCache[id].online = false;
-      });
+      Object.keys(APP._userCache).forEach(id => { APP._userCache[id].online = false; });
       data.users.forEach(userId => {
-        if (APP._userCache[userId]) {
-          APP._userCache[userId].online = true;
-        } else {
-          APP._userCache[userId] = { _id: userId, online: true };
-        }
+        if (APP._userCache[userId]) APP._userCache[userId].online = true;
+        else APP._userCache[userId] = { _id: userId, online: true };
       });
       renderChatList(APP.chats);
       renderFriends(APP.friends);
       break;
 
     case 'user_online':
-      if (APP._userCache[data.userId]) {
-        APP._userCache[data.userId].online = true;
-      } else {
-        APP._userCache[data.userId] = { _id: data.userId, online: true };
-      }
+      if (APP._userCache[data.userId]) APP._userCache[data.userId].online = true;
+      else APP._userCache[data.userId] = { _id: data.userId, online: true };
       renderChatList(APP.chats);
       renderFriends(APP.friends);
       updateChatHeaderStatus(data.userId, true);
       break;
 
     case 'user_offline':
-      if (APP._userCache[data.userId]) {
-        APP._userCache[data.userId].online = false;
-      }
+      if (APP._userCache[data.userId]) APP._userCache[data.userId].online = false;
       renderChatList(APP.chats);
       renderFriends(APP.friends);
       updateChatHeaderStatus(data.userId, false);
       break;
 
     case 'new_message': {
-      const msg     = data.message;
-      const chatId  = msg?.chatId;
-
-      // If NOT the currently open chat → increment unread count + show in-app notification
+      const msg    = data.message;
+      const chatId = msg?.chatId;
       if (chatId && chatId !== APP.currentChatId) {
         APP._unreadCounts[chatId] = (APP._unreadCounts[chatId] || 0) + 1;
         recalcTotalUnread();
         showInAppNotification(msg);
       }
-
-      // If the message window is open for this chat → refresh messages immediately
       if (APP.currentChatId && chatId === APP.currentChatId) {
         APP._lastIds.clear();
         loadMessages();
-        // Auto-mark as read since the chat is open
         API.markAllRead(APP.currentChatId);
       }
-
-      // Always refresh sidebar so preview + badge update
       loadChats();
       break;
     }
@@ -139,10 +98,7 @@ function handleWSMessage(data) {
     case 'message_delivered':
     case 'message_read':
     case 'messages_read':
-      if (APP.currentChatId) {
-        APP._lastIds.clear();
-        loadMessages();
-      }
+      if (APP.currentChatId) { APP._lastIds.clear(); loadMessages(); }
       break;
 
     default:
@@ -151,28 +107,31 @@ function handleWSMessage(data) {
 }
 
 // ── IN-APP NOTIFICATION BANNER ────────────────────────
+// FIX 1: Properly resolves sender name from cache + msg.sender object
 let _inAppTimer = null;
 
 function showInAppNotification(msg) {
   if (!msg) return;
 
-  // Resolve sender info from cache
-  const senderId = msg.sender?._id || msg.sender;
-  const sender   = (senderId && APP._userCache[senderId]) || msg.sender || {};
-  const name     = sender.name || sender.username || 'Someone';
-  const pic      = sender.profilePicture || '';
-  const letter   = name[0]?.toUpperCase() || '?';
-  const color    = ac(name);
-  const preview  = msg.type === 'audio' ? '🎤 Voice message' : (msg.content || 'New message');
+  // Resolve sender — merge msg.sender object with cache for best data
+  const senderRaw = msg.sender || {};
+  const senderId  = typeof senderRaw === 'object' ? senderRaw._id : senderRaw;
+  const cached    = (senderId && APP._userCache[senderId]) || {};
+  const sender    = { ...senderRaw, ...cached };
 
-  // Build or reuse the notification element
+  const name    = sender.name || sender.username || 'Someone';
+  const pic     = sender.profilePicture || '';
+  const letter  = name[0]?.toUpperCase() || '?';
+  const color   = ac(name);
+  const preview = msg.type === 'audio' ? '🎤 Voice message' : (msg.content || 'New message');
+
   let notif = document.getElementById('inAppNotif');
   if (!notif) {
     notif = document.createElement('div');
     notif.id = 'inAppNotif';
     notif.style.cssText = `
       position:fixed; top:16px; right:16px; z-index:9999;
-      background:var(--bg2,#2a2a3e); border:1px solid var(--brd,#3a3a50);
+      background:var(--bg2); border:1px solid var(--bdr);
       border-radius:14px; padding:12px 14px; min-width:260px; max-width:320px;
       box-shadow:0 8px 32px rgba(0,0,0,.45);
       display:flex; align-items:center; gap:10px; cursor:pointer;
@@ -181,23 +140,21 @@ function showInAppNotification(msg) {
     document.body.appendChild(notif);
   }
 
-  // Avatar
   const avHtml = pic
-    ? `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0">
+    ? `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;border:2px solid var(--bdr2)">
          <img src="${pic}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.style.background='${color}';this.remove()"/>
        </div>`
-    : `<div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;color:#fff">${letter}</div>`;
+    : `<div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;color:#071525">${letter}</div>`;
 
   notif.innerHTML = `
     ${avHtml}
     <div style="flex:1;min-width:0;overflow:hidden">
-      <div style="font-size:13px;font-weight:700;color:var(--txt,#e8e8f0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div>
-      <div style="font-size:12px;color:var(--txt2,#9090a8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">${esc(preview)}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div>
+      <div style="font-size:12px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">${esc(preview)}</div>
     </div>
     <button onclick="dismissInAppNotif(event)" style="background:none;border:none;color:var(--txt2);font-size:16px;cursor:pointer;flex-shrink:0;padding:0 0 0 4px;line-height:1">✕</button>
   `;
 
-  // Click banner → open that chat
   notif.onclick = (e) => {
     if (e.target.closest('button')) return;
     dismissInAppNotif();
@@ -209,16 +166,9 @@ function showInAppNotification(msg) {
     });
   };
 
-  // Slide in
-  requestAnimationFrame(() => {
-    notif.style.transform = 'translateX(0)';
-  });
-
-  // Auto-dismiss after 5s
+  requestAnimationFrame(() => { notif.style.transform = 'translateX(0)'; });
   clearTimeout(_inAppTimer);
   _inAppTimer = setTimeout(dismissInAppNotif, 5000);
-
-  // Play a subtle sound (optional — remove if not needed)
   playNotifSound();
 }
 
@@ -226,9 +176,7 @@ function dismissInAppNotif(e) {
   if (e) e.stopPropagation();
   clearTimeout(_inAppTimer);
   const notif = document.getElementById('inAppNotif');
-  if (notif) {
-    notif.style.transform = 'translateX(calc(100% + 24px))';
-  }
+  if (notif) notif.style.transform = 'translateX(calc(100% + 24px))';
 }
 
 function playNotifSound() {
@@ -244,9 +192,7 @@ function playNotifSound() {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.25);
-  } catch (_) {
-    // AudioContext blocked or unavailable — silent fail
-  }
+  } catch (_) {}
 }
 
 // ── UNREAD COUNT HELPERS ──────────────────────────────
@@ -258,7 +204,6 @@ function recalcTotalUnread() {
 function updateSidebarUnreadBadge() {
   let badge = document.getElementById('sbUnreadBadge');
   if (!badge) {
-    // Create badge on the sidebar toggle button if it doesn't exist
     const btn = document.querySelector('.sb-toggle, #sbToggle, [onclick="toggleSb()"]');
     if (btn) {
       badge = document.createElement('span');
@@ -282,14 +227,9 @@ function updateSidebarUnreadBadge() {
       badge.style.display = 'none';
     }
   }
-
-  // Also update the document title
-  document.title = APP._totalUnread > 0
-    ? `(${APP._totalUnread}) Chat App`
-    : 'Chat App';
+  document.title = APP._totalUnread > 0 ? `(${APP._totalUnread}) Chat App` : 'Chat App';
 }
 
-// Update chat header online dot/subtitle
 function updateChatHeaderStatus(userId, isOnline) {
   if (APP.currentChatType !== 'direct') return;
   const chat  = APP.chats.find(c => c._id === APP.currentChatId);
@@ -308,24 +248,19 @@ function handleTypingIndicator(data) {
   if (data.chatId !== APP.currentChatId) return;
   const sub = document.getElementById('cwSub');
   if (!sub) return;
-
   if (data.isTyping) {
     sub.textContent = 'typing…';
     clearTimeout(_typingTimer);
     _typingTimer = setTimeout(() => {
       const chat  = APP.chats.find(c => c._id === APP.currentChatId);
       const other = chat ? otherParticipant(chat) : null;
-      sub.textContent = APP.currentChatType === 'group'
-        ? 'Group chat'
-        : (other?.online ? '🟢 Online' : 'Offline');
+      sub.textContent = APP.currentChatType === 'group' ? 'Group chat' : (other?.online ? '🟢 Online' : 'Offline');
     }, 2000);
   } else {
     clearTimeout(_typingTimer);
     const chat  = APP.chats.find(c => c._id === APP.currentChatId);
     const other = chat ? otherParticipant(chat) : null;
-    sub.textContent = APP.currentChatType === 'group'
-      ? 'Group chat'
-      : (other?.online ? '🟢 Online' : 'Offline');
+    sub.textContent = APP.currentChatType === 'group' ? 'Group chat' : (other?.online ? '🟢 Online' : 'Offline');
   }
 }
 
@@ -340,14 +275,18 @@ window.addEventListener('DOMContentLoaded', async () => {
   initEmojiBar();
   const restored = tryRestore();
   if (restored) {
-    const r = await API.verifyToken();
-    if (r.ok && r.data.user) {
-      APP.me = r.data.user;
-      startApp(); return;
-    } else {
-      try { localStorage.removeItem('cba_token'); } catch (e) {}
-      API.set(null);
+    try {
+      const r = await API.verifyToken();
+      if (r.ok) {
+        APP.me = r.data.user || r.data || {};
+        startApp();
+        return;
+      }
+    } catch (e) {
+      console.warn('[Boot] Token verify failed:', e);
     }
+    try { localStorage.removeItem('cba_token'); } catch (e) {}
+    API.set(null);
   }
   document.getElementById('authWrap').classList.remove('hidden');
 });
@@ -355,9 +294,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 function startApp() {
   document.getElementById('authWrap').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-
-  // On mobile: open sidebar by default so users see their chats immediately,
-  // not a blank screen. FAB is hidden while sidebar is open.
   const isMobile = window.innerWidth <= 720;
   if (isMobile) {
     document.getElementById('sb').classList.add('open');
@@ -366,7 +302,6 @@ function startApp() {
   } else {
     document.getElementById('fab').classList.remove('hidden');
   }
-
   refreshUserUI();
   loadChats();
   loadFriends();
@@ -378,7 +313,6 @@ function startApp() {
   setInterval(() => { loadChats(); loadIncomingReqs(); }, 10000);
 }
 
-// Request browser push notification permission
 async function requestNotifPermission() {
   if ('Notification' in window && Notification.permission === 'default') {
     await Notification.requestPermission();
@@ -447,7 +381,6 @@ function refreshUserUI() {
   const name   = u.name || u.username || 'User';
   const letter = name[0]?.toUpperCase() || '?';
   const color  = ac(name);
-
   setAv('sbAv', u.profilePicture, letter, color, 'sm');
   document.getElementById('sbName').textContent     = name;
   setAv('drAv', u.profilePicture, letter, color, 'xl');
@@ -489,10 +422,7 @@ function toggleSb() {
 function closeSb() {
   document.getElementById('sb').classList.remove('open');
   document.getElementById('sbOverlay').classList.add('hidden');
-  // Show FAB only when no chat is open
-  if (!APP.currentChatId) {
-    document.getElementById('fab').classList.remove('hidden');
-  }
+  if (!APP.currentChatId) document.getElementById('fab').classList.remove('hidden');
 }
 function sbTab(t) {
   document.querySelectorAll('.sn-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t));
@@ -505,24 +435,13 @@ async function loadChats() {
   const r = await API.getChats();
   if (!r.ok) return;
   APP.chats = r.data.chats || r.data || [];
-
-  // Hydrate name/avatar data — strip `online` so WS stays in control
   APP.chats.forEach(c => {
-    (c.participants || []).forEach(p => {
-      if (p && p._id) cacheUserFromAPI(p);
-    });
-
-    // Seed unread counts from API response (backend should send unreadCount per chat)
+    (c.participants || []).forEach(p => { if (p && p._id) cacheUserFromAPI(p); });
     if (c._id) {
       const apiCount = c.unreadCount || 0;
-      // Only set from API if we don't already have a higher WS-driven count
-      // (WS increments happen between polls — we don't want to reset those)
-      if (apiCount > (APP._unreadCounts[c._id] || 0)) {
-        APP._unreadCounts[c._id] = apiCount;
-      }
+      if (apiCount > (APP._unreadCounts[c._id] || 0)) APP._unreadCounts[c._id] = apiCount;
     }
   });
-
   recalcTotalUnread();
   renderChatList(APP.chats);
 }
@@ -554,27 +473,18 @@ function renderChatList(list) {
     return;
   }
   el.innerHTML = list.map(c => {
-    const name    = chatName(c);
-    const prev    = c.lastMessage?.type === 'audio' ? '🎤 Voice message' : (c.lastMessage?.content || '');
-    const time    = c.lastMessage?.createdAt ? fmtTime(c.lastMessage.createdAt) : '';
-    const unread  = APP._unreadCounts[c._id] || 0;
-    const avHtml  = c.type === 'group'
+    const name   = chatName(c);
+    const prev   = c.lastMessage?.type === 'audio' ? '🎤 Voice message' : (c.lastMessage?.content || '');
+    const time   = c.lastMessage?.createdAt ? fmtTime(c.lastMessage.createdAt) : '';
+    const unread = APP._unreadCounts[c._id] || 0;
+    const avHtml = c.type === 'group'
       ? makeAv({ name, profilePicture: c.profilePicture || '' }, 'xs', false)
       : makeAv(otherParticipant(c) || { name }, 'xs', true);
-
-    // Unread badge — shown as a green pill with count
-    const badge = unread > 0
-      ? `<span style="
-            display:inline-flex;align-items:center;justify-content:center;
-            min-width:18px;height:18px;padding:0 5px;
-            background:#22c55e;color:#fff;border-radius:9px;
-            font-size:11px;font-weight:700;flex-shrink:0"
-          >${unread > 99 ? '99+' : unread}</span>`
+    const badge  = unread > 0
+      ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;background:#22c55e;color:#fff;border-radius:9px;font-size:11px;font-weight:700;flex-shrink:0">${unread > 99 ? '99+' : unread}</span>`
       : '';
-
     return `<div class="crow${c._id === APP.currentChatId ? ' active' : ''}${unread > 0 ? ' has-unread' : ''}"
-        onclick="openChat('${c._id}','${esc(name)}','${c.type||'direct'}')"
-        data-id="${c._id}">
+        onclick="openChat('${c._id}','${esc(name)}','${c.type||'direct'}')" data-id="${c._id}">
       ${avHtml}
       <div class="cri">
         <div class="cri-top">
@@ -596,11 +506,9 @@ function openChat(id, name, type) {
   APP.currentChatName = name;
   APP.currentChatType = type;
   document.querySelectorAll('.crow').forEach(r => r.classList.toggle('active', r.dataset.id === id));
-
-  // Clear unread count for this chat immediately
   APP._unreadCounts[id] = 0;
   recalcTotalUnread();
-  renderChatList(APP.chats); // re-render to remove the badge
+  renderChatList(APP.chats);
 
   const chat   = APP.chats.find(c => c._id === id);
   const color  = ac(name);
@@ -609,24 +517,18 @@ function openChat(id, name, type) {
   cwAv.className = 'av av-sm';
 
   let headerPic = '';
-  if (type === 'group') {
-    headerPic = chat?.profilePicture || '';
-  } else if (chat) {
-    headerPic = otherParticipant(chat)?.profilePicture || '';
-  }
+  if (type === 'group') headerPic = chat?.profilePicture || '';
+  else if (chat) headerPic = otherParticipant(chat)?.profilePicture || '';
 
   if (headerPic) {
     cwAv.style.background = 'transparent';
-    cwAv.innerHTML = `<img src="${headerPic}" alt="${letter}"
-      style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block"
-      onerror="this.remove()"/>`;
+    cwAv.innerHTML = `<img src="${headerPic}" alt="${letter}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block" onerror="this.remove()"/>`;
   } else {
     cwAv.style.background = color;
     cwAv.textContent = letter;
   }
 
   document.getElementById('cwName').textContent = name;
-
   const sub = document.getElementById('cwSub');
   if (type === 'group') {
     sub.textContent = 'Group chat';
@@ -651,10 +553,8 @@ function closeCwin() {
   clearInterval(APP.pollTimer);
   APP.currentChatId = null;
   document.querySelectorAll('.crow').forEach(r => r.classList.remove('active'));
-
   const isMobile = window.innerWidth <= 720;
   if (isMobile) {
-    // On mobile: go back to sidebar (chat list), not the blank welcome screen
     document.getElementById('sb').classList.add('open');
     document.getElementById('sbOverlay').classList.remove('hidden');
     document.getElementById('fab').classList.add('hidden');
@@ -675,11 +575,7 @@ async function refreshMsgs() {
   const ids  = msgs.map(m => m._id).join(',');
   if (APP._lastIds.size && ids === [...APP._lastIds].join(',')) return;
   APP._lastIds = new Set(msgs.map(m => m._id));
-  msgs.forEach(m => {
-    if (m.sender && typeof m.sender === 'object' && m.sender._id) {
-      cacheUserFromAPI(m.sender);
-    }
-  });
+  msgs.forEach(m => { if (m.sender && typeof m.sender === 'object' && m.sender._id) cacheUserFromAPI(m.sender); });
   renderMessages(msgs);
 }
 
@@ -711,25 +607,20 @@ function renderMessages(msgs) {
     let senderBlock = '';
     if (!isOut) {
       if (APP.currentChatType === 'group') {
-        const sender  = cachedUser(msg.sender) || (typeof msg.sender === 'object' ? msg.sender : {});
-        const sName   = sender.name || sender.username || 'User';
-        senderBlock   = `<div class="mb-sname" style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        const sender = cachedUser(msg.sender) || (typeof msg.sender === 'object' ? msg.sender : {});
+        const sName  = sender.name || sender.username || 'User';
+        senderBlock  = `<div class="mb-sname" style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
           ${makeAv(sender, 'xs', false)}<span style="font-size:11px;font-weight:600">${esc(sName)}</span>
         </div>`;
       } else {
         const sender = cachedUser(msg.sender) || other || {};
-        senderBlock  = `<div style="display:flex;align-items:flex-end;gap:5px;margin-bottom:2px">
-          ${makeAv(sender, 'xs', false)}
-        </div>`;
+        senderBlock  = `<div style="display:flex;align-items:flex-end;gap:5px;margin-bottom:2px">${makeAv(sender, 'xs', false)}</div>`;
       }
     }
 
-    let content;
-    if (msg.type === 'audio' || msg.audioUrl) {
-      content = renderVoiceBubble(msg);
-    } else {
-      content = `<div>${esc(msg.content || '')}</div>`;
-    }
+    const content = (msg.type === 'audio' || msg.audioUrl)
+      ? renderVoiceBubble(msg)
+      : `<div>${esc(msg.content || '')}</div>`;
 
     html += `<div class="mb ${cls}">${delBtn}${senderBlock}${content}<div class="mb-foot"><span class="mb-time">${time}</span>${tick}</div></div>`;
   });
@@ -808,7 +699,6 @@ let _typingSendTimer = null;
 function taResize(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-
   if (el.value.length > 0) {
     sendTyping(true);
     clearTimeout(_typingSendTimer);
@@ -903,10 +793,7 @@ async function loadFriends() {
   const r = await API.getMyFriends();
   if (!r.ok) return;
   APP.friends = r.data.friends || r.data || [];
-  APP.friends.forEach(f => {
-    const u = f.user || f;
-    cacheUserFromAPI(u);
-  });
+  APP.friends.forEach(f => { const u = f.user || f; cacheUserFromAPI(u); });
   renderFriends(APP.friends);
 }
 
@@ -946,20 +833,35 @@ async function loadIncomingReqs() {
   renderRequests(reqs);
 }
 
+// FIX 3: Incoming requests now show full user card — avatar, name, username, email
 function renderRequests(list) {
   const el = document.getElementById('reqList'); if (!el) return;
-  if (!list.length) { el.innerHTML = '<div class="empty-list">No pending requests</div>'; return; }
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-list">No pending requests</div>';
+    return;
+  }
   el.innerHTML = list.map(req => {
-    const u    = req.sender || req;
-    const name = u.name || u.username || 'User';
-    return `<div class="freq">
-      ${makeAv(u, 'xs', false)}
+    const u      = req.sender || req;
+    const name   = u.name || u.username || 'User';
+    const color  = ac(name);
+    const letter = name[0]?.toUpperCase() || '?';
+    const pic    = u.profilePicture || '';
+
+    const avHtml = pic
+      ? `<div style="width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;border:2px solid var(--bdr2)">
+           <img src="${pic}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.style.background='${color}';this.remove()"/>
+         </div>`
+      : `<div style="width:42px;height:42px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0;color:#071525">${letter}</div>`;
+
+    return `<div class="freq" style="padding:10px 8px;border-bottom:1px solid var(--bdr);align-items:center">
+      ${avHtml}
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${esc(name)}</div>
-        <div style="font-size:11px;color:var(--txt2)">@${esc(u.username||'')}</div>
+        <div style="font-size:14px;font-weight:700;color:var(--txt)">${esc(name)}</div>
+        <div style="font-size:12px;color:var(--txt2);margin-top:1px">@${esc(u.username || '')}</div>
+        ${u.email ? `<div style="font-size:11px;color:var(--txt3);margin-top:1px">${esc(u.email)}</div>` : ''}
       </div>
-      <div class="freq-actions">
-        <button class="act-btn acc" onclick="doRespondReq('${req._id}','accepted')">✓</button>
+      <div class="freq-actions" style="gap:6px">
+        <button class="act-btn acc" onclick="doRespondReq('${req._id}','accepted')">✓ Accept</button>
         <button class="act-btn rej" onclick="doRespondReq('${req._id}','rejected')">✕</button>
       </div>
     </div>`;
@@ -975,28 +877,120 @@ async function doRespondReq(id, action) {
   } else toast(r.data?.message || 'Failed', 'err');
 }
 
-async function doAddFriend() {
-  const username = (document.getElementById('afInput')?.value || '').trim();
-  const res      = document.getElementById('afResult'); if (!res) return;
-  if (!username) return;
-  res.textContent = 'Sending…'; res.className = '';
+// FIX 2: Add Friend — live search with user cards before sending request
+let _afSearchTimer = null;
+
+function renderAddFriendPanel() {
+  const panel = document.getElementById('fp-add');
+  if (!panel) return;
+  panel.innerHTML = `
+    <div class="add-friend-wrap">
+      <p class="af-hint">Search by name or username</p>
+      <div class="finput">
+        <svg class="fi-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input id="afInput" type="text" placeholder="Start typing a name…" oninput="afSearch()" autocomplete="off"/>
+      </div>
+      <div id="afResults" style="margin-top:8px"></div>
+      <div id="afResult" style="font-size:13px;min-height:16px;margin-top:6px"></div>
+    </div>
+  `;
+}
+
+async function afSearch() {
+  const q         = (document.getElementById('afInput')?.value || '').trim();
+  const resultsEl = document.getElementById('afResults');
+  if (!resultsEl) return;
+
+  clearTimeout(_afSearchTimer);
+
+  if (q.length < 2) {
+    resultsEl.innerHTML = q.length === 1
+      ? `<div style="font-size:12px;color:var(--txt3);padding:6px 4px">Keep typing…</div>`
+      : '';
+    return;
+  }
+
+  resultsEl.innerHTML = `<div class="list-spin" style="padding:14px"><div class="spin"></div></div>`;
+
+  _afSearchTimer = setTimeout(async () => {
+    const r = await API.searchUsers(q);
+    if (!r.ok) {
+      resultsEl.innerHTML = `<div style="font-size:13px;color:var(--red);padding:6px 4px">Search failed</div>`;
+      return;
+    }
+
+    const users = (r.data.users || r.data || []).filter(u => u._id !== APP.me._id);
+    users.forEach(u => cacheUserFromAPI(u));
+
+    if (!users.length) {
+      resultsEl.innerHTML = `<div class="empty-list" style="padding:16px 4px">No users found for "<b>${esc(q)}</b>"</div>`;
+      return;
+    }
+
+    resultsEl.innerHTML = users.slice(0, 10).map(u => {
+      const name   = u.name || u.username || 'User';
+      const color  = ac(name);
+      const letter = name[0]?.toUpperCase() || '?';
+      const pic    = u.profilePicture || '';
+
+      const avHtml = pic
+        ? `<div style="width:40px;height:40px;border-radius:50%;overflow:hidden;flex-shrink:0;border:2px solid var(--bdr2)">
+             <img src="${pic}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.style.background='${color}';this.remove()"/>
+           </div>`
+        : `<div style="width:40px;height:40px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;color:#071525">${letter}</div>`;
+
+      return `
+        <div class="freq" style="padding:9px 6px;border-bottom:1px solid var(--bdr)">
+          ${avHtml}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--txt)">${esc(name)}</div>
+            <div style="font-size:11px;color:var(--txt2);margin-top:1px">@${esc(u.username || '')}</div>
+            ${u.email ? `<div style="font-size:10px;color:var(--txt3);margin-top:1px">${esc(u.email)}</div>` : ''}
+          </div>
+          <button class="act-btn acc" onclick="doSendFriendReq('${u._id}','${esc(u.username || '')}',this)"
+            style="white-space:nowrap;font-size:11px;padding:5px 10px">
+            + Add
+          </button>
+        </div>`;
+    }).join('');
+  }, 300);
+}
+
+async function doSendFriendReq(userId, username, btn) {
+  const resEl   = document.getElementById('afResult');
+  btn.disabled  = true;
+  btn.textContent = '…';
   const r = await API.sendFriendReq({ username });
   if (r.ok) {
-    res.textContent = `✓ Request sent to @${username}`;
-    res.className = 'ok';
-    document.getElementById('afInput').value = '';
-    toast('Request sent!', 'ok');
+    btn.textContent      = '✓ Sent';
+    btn.style.background = 'var(--green)';
+    if (resEl) { resEl.textContent = `✓ Request sent to @${username}`; resEl.className = 'ok'; }
+    toast('Friend request sent!', 'ok');
   } else {
-    res.textContent = r.data?.message || 'User not found';
-    res.className = 'err';
+    btn.disabled        = false;
+    btn.textContent     = '+ Add';
+    const msg = r.data?.message || 'Failed to send request';
+    if (resEl) { resEl.textContent = msg; resEl.className = 'err'; }
+    toast(msg, 'err');
   }
 }
 
+// Keep old doAddFriend as no-op so nothing breaks
+function doAddFriend() {}
+
+// Updated fpTab — renders Add Friend panel dynamically
 function fpTab(t) {
-  ['mine','reqs','add'].forEach(id => document.getElementById(`fp-${id}`).classList.toggle('hidden', id !== t));
-  document.querySelectorAll('.fp-tab').forEach((b, i) => b.classList.toggle('active', ['mine','reqs','add'][i] === t));
+  ['mine','reqs','add'].forEach(id =>
+    document.getElementById(`fp-${id}`).classList.toggle('hidden', id !== t)
+  );
+  document.querySelectorAll('.fp-tab').forEach((b, i) =>
+    b.classList.toggle('active', ['mine','reqs','add'][i] === t)
+  );
   if (t === 'reqs') loadIncomingReqs();
   if (t === 'mine') loadFriends();
+  if (t === 'add')  renderAddFriendPanel();
 }
 
 // ── SETTINGS DRAWER ───────────────────────────────────
@@ -1136,8 +1130,8 @@ async function loadSubStatus() {
   const planLabel = (plan === 'none' || plan === 'free') ? 'Free' : plan.charAt(0).toUpperCase() + plan.slice(1);
 
   const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  setTxt('sbPlan',           planLabel + ' Plan');
-  setTxt('subPlanName',      planLabel + ' Plan');
+  setTxt('sbPlan',            planLabel + ' Plan');
+  setTxt('subPlanName',       planLabel + ' Plan');
   setTxt('cancelResumeLabel', status === 'active' ? 'Cancel Subscription' : 'Resume Subscription');
   setTxt('subPlanDesc',       status === 'active' ? 'Active subscription' : status === 'none' ? 'No active subscription' : 'Inactive');
 
@@ -1199,13 +1193,31 @@ function defaultFeaturesFor(plan) {
 }
 
 async function subscribeToPlan(planType) {
-  toast('Redirecting to checkout…', 'info');
-  const r = await API.createCheckout({ planType });
-  if (r.ok) {
-    const url = r.data.url || r.data.checkoutUrl;
-    if (url) { window.open(url, '_blank'); closeM(); }
-    else { toast(r.data?.message || 'Checkout created', 'ok'); closeM(); }
-  } else toast(r.data?.message || 'Failed', 'err');
+  const sub          = APP.subStatus || {};
+  const currentPlan  = (sub.plan || sub.planType || 'free').toLowerCase();
+  const hasActiveSub = sub.status === 'active' && currentPlan !== 'free' && currentPlan !== 'none';
+
+  if (hasActiveSub) {
+    toast('Updating your plan…', 'info');
+    const r = await API.updatePlan({ planType });
+    if (r.ok) {
+      toast('Plan updated successfully! ✓', 'ok');
+      closeM();
+      await loadSubStatus();
+    } else {
+      toast(r.data?.message || 'Failed to update plan', 'err');
+    }
+  } else {
+    toast('Redirecting to checkout…', 'info');
+    const r = await API.createCheckout({ planType });
+    if (r.ok) {
+      const url = r.data.url || r.data.checkoutUrl;
+      if (url) { window.open(url, '_blank'); closeM(); }
+      else { toast(r.data?.message || 'Checkout created', 'ok'); closeM(); }
+    } else {
+      toast(r.data?.message || 'Failed', 'err');
+    }
+  }
 }
 
 async function toggleSubscription() {
@@ -1303,7 +1315,6 @@ async function doCreateGroup() {
   else toast(r.data?.message || 'Failed', 'err');
 }
 
-
 // ── VOICE RECORDING ───────────────────────────────────
 let _mediaRecorder = null;
 let _audioChunks   = [];
@@ -1313,20 +1324,19 @@ let _recSeconds    = 0;
 function isMobileView() { return window.innerWidth <= 720; }
 
 async function toggleMic() {
-  if (_mediaRecorder && _mediaRecorder.state === 'recording') {
-    stopAndSendRecording();
-  } else {
-    await startRecording();
-  }
+  if (_mediaRecorder && _mediaRecorder.state === 'recording') stopAndSendRecording();
+  else await startRecording();
 }
 
 async function startRecording() {
+  toast('Audio recording feature is currently in testing and may not work perfectly. Please try again later.', 'info');
+ return;
   if (!navigator.mediaDevices?.getUserMedia) {
     toast('Microphone not supported', 'err'); return;
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    _audioChunks = [];
+    _audioChunks   = [];
     _mediaRecorder = new MediaRecorder(stream);
 
     _mediaRecorder.ondataavailable = e => { if (e.data.size) _audioChunks.push(e.data); };
@@ -1337,7 +1347,7 @@ async function startRecording() {
       await uploadAudio(blob);
     };
 
-    _mediaRecorder.start();
+ _mediaRecorder.start(250);
     _recSeconds = 0;
     showRecBar();
     _recTimer = setInterval(() => {
@@ -1349,23 +1359,20 @@ async function startRecording() {
         el.textContent = `${m}:${s}`;
       }
     }, 1000);
-
   } catch (e) {
     toast('Microphone permission denied', 'err');
   }
 }
 
 function stopAndSendRecording() {
-  if (_mediaRecorder && _mediaRecorder.state === 'recording') {
-    _mediaRecorder.stop();
-  }
+  if (_mediaRecorder && _mediaRecorder.state === 'recording') _mediaRecorder.stop();
   clearInterval(_recTimer);
 }
 
 function cancelRecording() {
   clearInterval(_recTimer);
   if (_mediaRecorder) {
-    _mediaRecorder.onstop = () => { // override — don't send
+    _mediaRecorder.onstop = () => {
       const stream = _mediaRecorder?.stream;
       stream?.getTracks().forEach(t => t.stop());
     };
@@ -1395,30 +1402,55 @@ function hideRecBar() {
   if (mic) mic.classList.remove('recording');
   const el = document.getElementById('recTime');
   if (el) el.textContent = '0:00';
-  _recSeconds = 0;
+  _recSeconds    = 0;
   _mediaRecorder = null;
-  _audioChunks = [];
+  _audioChunks   = [];
 }
 
 async function uploadAudio(blob) {
-  if (!APP.currentChatId) return;
+  console.log('uploadAudio called');
+  console.log('currentChatId:', APP.currentChatId);  // ← check this
+  console.log('blob size:', blob?.size);
+
+  if (!APP.currentChatId) {
+    toast('No chat selected', 'err');
+    return;
+  }
+
+  if (!blob || blob.size === 0) {
+    toast('Recording was empty, please try again', 'err');
+    return;
+  }
 
   const fd = new FormData();
-  fd.append('audio', blob, 'voice.webm'); // field name must match audioUpload.single('audio')
-  fd.append('chatId', APP.currentChatId);
-  fd.append('type', 'audio');
+  fd.append('audio', blob, 'voice.webm');
+  const uploadRes = await API.voicemessage(fd);
+  console.log('upload response:', uploadRes);
 
-  const r = await API.voicemessage(fd);
+  if (!uploadRes.ok) {
+    toast(uploadRes.data?.message || 'Failed to upload audio', 'err');
+    return;
+  }
 
-  if (r.ok) {
+  const audioUrl = uploadRes.data.url;
+  console.log('audioUrl:', audioUrl);  // ← check this
+
+  const msgRes = await API.sendAudioMessage({
+  chatId:   APP.currentChatId,
+  type:     'audio',
+  audioUrl: audioUrl,
+  content:  '🎤 Voice message',
+});
+  console.log('sendMessage response:', msgRes);  // ← check this
+
+  if (msgRes.ok) {
     APP._lastIds.clear();
     await loadMessages();
     loadChats();
   } else {
-    toast(r.data?.message || 'Failed to send audio', 'err');
+    toast(msgRes.data?.message || 'Failed to send audio message', 'err');
   }
 }
-
 // ── LOGOUT ────────────────────────────────────────────
 async function doLogout() {
   disconnectWS();
@@ -1427,7 +1459,6 @@ async function doLogout() {
   API.set(null);
   clearInterval(APP.pollTimer);
   closeDrawer();
-  // Reset unread state
   APP._unreadCounts = {};
   APP._totalUnread  = 0;
   document.title    = 'Chat App';
@@ -1468,3 +1499,9 @@ function ac(s = '') {
   let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
   return COLORS[Math.abs(h) % COLORS.length];
 }
+
+const btn = document.getElementById('micBtn');
+btn.addEventListener('click', () => {
+  toast('Audio recording feature is currently in testing and may not work perfectly. Please try again later.', 'info');
+
+});

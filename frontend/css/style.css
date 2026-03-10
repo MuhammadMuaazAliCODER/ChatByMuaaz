@@ -476,7 +476,7 @@ textarea{resize:none;line-height:1.55}
 /* ── MOBILE OVERLAY & FAB ────────────────────────*/
 .sb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;backdrop-filter:blur(2px)}
 .fab{
-  position:fixed;bottom:18px;right:18px;
+  position:fixed;bottom:-2px;right:8px;
   width:50px;height:50px;border-radius:50%;
   background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;
   color:#071525;cursor:pointer;display:flex;align-items:center;justify-content:center;
@@ -565,3 +565,11 @@ textarea{resize:none;line-height:1.55}
 }
 
 .mb-del , .mb-del {display: none!important;}
+
+
+#fp-mine,
+#fp-reqs {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}

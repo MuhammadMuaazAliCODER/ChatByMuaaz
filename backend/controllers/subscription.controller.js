@@ -7,7 +7,6 @@ class SubscriptionController {
 
   // ─────────────────────────────────────────────────────────────────────────
   // GET /subscription/plans
-  // Returns all available plans (no auth required)
   // ─────────────────────────────────────────────────────────────────────────
   async getPlans(req, res) {
     try {
@@ -27,19 +26,12 @@ class SubscriptionController {
   // ─────────────────────────────────────────────────────────────────────────
   // POST /subscription/checkout
   // Creates a Stripe Checkout session for a NEW subscription.
-  //
-  // Rules enforced:
-  //  • Free plan has no checkout (skip)
-  //  • Cannot buy the same plan twice while active
-  //  • Cannot downgrade while a plan is active (use update-plan for upgrades)
-  //  • If user already has active sub and wants higher plan → redirect to update-plan
   // ─────────────────────────────────────────────────────────────────────────
   async createCheckoutSession(req, res) {
     try {
       const { planType } = req.body;
       const userId = req.user._id;
 
-      // Validate plan exists and is not free
       if (!SUBSCRIPTION_PLANS[planType]) {
         return res.status(400).json({
           success: false,
@@ -59,13 +51,11 @@ class SubscriptionController {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
 
-      // ── Purchase restriction logic ────────────────────────────────────────
       if (user.subscription?.status === 'active') {
-        const currentPlan = user.subscription.plan;            // e.g. "basic"
-        const currentLevel = PLAN_HIERARCHY[currentPlan] ?? -1;
-        const requestedLevel = PLAN_HIERARCHY[planType] ?? -1;
+        const currentPlan    = user.subscription.plan;
+        const currentLevel   = PLAN_HIERARCHY[currentPlan]  ?? -1;
+        const requestedLevel = PLAN_HIERARCHY[planType]     ?? -1;
 
-        // Same plan — already subscribed
         if (requestedLevel === currentLevel) {
           return res.status(400).json({
             success: false,
@@ -73,7 +63,6 @@ class SubscriptionController {
           });
         }
 
-        // Downgrade attempt — not allowed mid-cycle
         if (requestedLevel < currentLevel) {
           return res.status(400).json({
             success: false,
@@ -81,7 +70,6 @@ class SubscriptionController {
           });
         }
 
-        // Upgrade — tell frontend to call /update-plan instead
         if (requestedLevel > currentLevel) {
           return res.status(400).json({
             success: false,
@@ -90,9 +78,7 @@ class SubscriptionController {
           });
         }
       }
-      // ─────────────────────────────────────────────────────────────────────
 
-      // Create Stripe customer if this user doesn't have one yet
       let customerId = user.stripeCustomerId;
       if (!customerId) {
         const customer = await stripe.customers.create({
@@ -104,7 +90,6 @@ class SubscriptionController {
         await user.save();
       }
 
-      // Build Checkout session
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
         mode: 'subscription',
@@ -115,8 +100,8 @@ class SubscriptionController {
             quantity: 1
           }
         ],
-        success_url: "http://localhost:3000/",
-cancel_url: "http://localhost:3000/",
+        success_url: process.env.FRONTEND_URL || 'http://localhost:3000/',
+        cancel_url:  process.env.FRONTEND_URL || 'http://localhost:3000/',
         metadata: {
           userId: user._id.toString(),
           planType
@@ -141,7 +126,6 @@ cancel_url: "http://localhost:3000/",
 
   // ─────────────────────────────────────────────────────────────────────────
   // GET /subscription/status
-  // Returns the current user's subscription status + usage info
   // ─────────────────────────────────────────────────────────────────────────
   async getSubscriptionStatus(req, res) {
     try {
@@ -152,7 +136,6 @@ cancel_url: "http://localhost:3000/",
         return res.status(404).json({ success: false, message: 'User not found' });
       }
 
-      // Run reset check so returned usage is always accurate
       user.resetMonthlyMessagesIfNeeded();
       await user.save();
 
@@ -161,18 +144,17 @@ cancel_url: "http://localhost:3000/",
       return res.json({
         success: true,
         subscription: {
-          status: user.subscription?.status || 'none',
-          plan: user.subscription?.plan || 'free',
-          role: user.role,
-          currentPeriodEnd: user.subscription?.currentPeriodEnd || null,
+          status:            user.subscription?.status           || 'none',
+          plan:              user.subscription?.plan             || 'free',
+          role:              user.role,
+          currentPeriodEnd:  user.subscription?.currentPeriodEnd || null,
           cancelAtPeriodEnd: user.subscription?.cancelAtPeriodEnd || false
         },
         usage: {
           messagesSentThisMonth: user.usage.messagesSentThisMonth,
-          monthlyLimit: limit === -1 ? 'unlimited' : limit,
-          remaining: user.getRemainingMessages() === -1 ? 'unlimited' : user.getRemainingMessages(),
+          monthlyLimit:  limit === -1 ? 'unlimited' : limit,
+          remaining:     user.getRemainingMessages() === -1 ? 'unlimited' : user.getRemainingMessages(),
           resetDate: (() => {
-            // Show first day of next month as the reset date
             const d = new Date();
             return new Date(d.getFullYear(), d.getMonth() + 1, 1);
           })()
@@ -190,8 +172,6 @@ cancel_url: "http://localhost:3000/",
 
   // ─────────────────────────────────────────────────────────────────────────
   // POST /subscription/cancel
-  // Cancels the subscription at the end of the current billing period.
-  // User keeps access until currentPeriodEnd, then role drops to FREE.
   // ─────────────────────────────────────────────────────────────────────────
   async cancelSubscription(req, res) {
     try {
@@ -236,7 +216,6 @@ cancel_url: "http://localhost:3000/",
 
   // ─────────────────────────────────────────────────────────────────────────
   // POST /subscription/resume
-  // Undoes a scheduled cancellation (only works before period ends)
   // ─────────────────────────────────────────────────────────────────────────
   async resumeSubscription(req, res) {
     try {
@@ -283,12 +262,6 @@ cancel_url: "http://localhost:3000/",
   // ─────────────────────────────────────────────────────────────────────────
   // PATCH /subscription/update-plan
   // Upgrades an existing active subscription to a higher plan.
-  // Prorates immediately and issues an invoice for the difference.
-  //
-  // Rules:
-  //  • Must have an active subscription
-  //  • Can only UPGRADE (not downgrade) through this endpoint
-  //  • The new billing period timer carries over from the existing plan
   // ─────────────────────────────────────────────────────────────────────────
   async updateSubscriptionPlan(req, res) {
     try {
@@ -310,9 +283,9 @@ cancel_url: "http://localhost:3000/",
         });
       }
 
-      const currentPlan = user.subscription.plan;
-      const currentLevel = PLAN_HIERARCHY[currentPlan] ?? -1;
-      const requestedLevel = PLAN_HIERARCHY[planType] ?? -1;
+      const currentPlan    = user.subscription.plan;
+      const currentLevel   = PLAN_HIERARCHY[currentPlan]  ?? -1;
+      const requestedLevel = PLAN_HIERARCHY[planType]     ?? -1;
 
       if (requestedLevel <= currentLevel) {
         return res.status(400).json({
@@ -323,13 +296,10 @@ cancel_url: "http://localhost:3000/",
         });
       }
 
-      // Retrieve current subscription items from Stripe
       const stripeSub = await stripe.subscriptions.retrieve(
         user.subscription.subscriptionId
       );
 
-      // Update the subscription item to the new price
-      // proration_behavior: 'always_invoice' → charges the difference immediately
       const updated = await stripe.subscriptions.update(
         user.subscription.subscriptionId,
         {
@@ -338,25 +308,35 @@ cancel_url: "http://localhost:3000/",
             price: SUBSCRIPTION_PLANS[planType].priceId
           }],
           proration_behavior: 'always_invoice'
-          // NOTE: current_period_end does NOT reset — the billing cycle stays the same
         }
       );
 
-      // Sync role and plan locally
-      user.subscription.plan = planType;
-      user.subscription.currentPeriodEnd = new Date(updated.current_period_end * 1000);
-      user.role = SUBSCRIPTION_PLANS[planType].role;
+      // ── Safely resolve currentPeriodEnd ──────────────────────────────────
+      // 1. Use Stripe's value if present
+      // 2. Fall back to existing saved value
+      // 3. Last resort: 30 days from now
+      const periodEnd =
+        (updated.current_period_end
+          ? new Date(updated.current_period_end * 1000)
+          : null) ||
+        user.subscription.currentPeriodEnd ||
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      user.subscription.plan             = planType;
+      user.subscription.currentPeriodEnd = periodEnd;
+      user.role                          = SUBSCRIPTION_PLANS[planType].role;
       await user.save();
 
       return res.json({
         success: true,
         message: `Plan upgraded to ${planType}. You have been charged the prorated difference.`,
-        plan: planType,
-        role: user.role,
-        currentPeriodEnd: new Date(updated.current_period_end * 1000)
+        plan:             planType,
+        role:             user.role,
+        currentPeriodEnd: periodEnd
       });
 
     } catch (error) {
+      console.error('Update Plan Error:', error);
       return res.status(500).json({
         success: false,
         message: 'Error updating plan',
@@ -367,8 +347,6 @@ cancel_url: "http://localhost:3000/",
 
   // ─────────────────────────────────────────────────────────────────────────
   // POST /subscription/portal
-  // Creates a Stripe Billing Portal session for the user to manage
-  // payment methods, invoices, etc.
   // ─────────────────────────────────────────────────────────────────────────
   async createPortalSession(req, res) {
     try {
@@ -382,7 +360,7 @@ cancel_url: "http://localhost:3000/",
       }
 
       const portalSession = await stripe.billingPortal.sessions.create({
-        customer: user.stripeCustomerId,
+        customer:   user.stripeCustomerId,
         return_url: process.env.FRONTEND_URL
       });
 
