@@ -16,6 +16,8 @@ export const uploadAudio = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No audio file provided' });
     }
 
+    console.log(req.file, req.file.buffer);
+
     // Stream the buffer directly to Cloudinary (no temp file on disk)
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(

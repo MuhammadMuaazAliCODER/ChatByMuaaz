@@ -77,19 +77,12 @@ const VOICE = (() => {
   }
 
   // Convert blob to base64 and send as audio message
-  async function onRecordingComplete(blob) {
-    const duration = secondsElapsed;
-    const reader = new FileReader();
-    reader.readAsDataURL(blob);
-    reader.onloadend = async () => {
-      const base64 = reader.result;
-      // Send as audio message with base64 or just a placeholder URL
-      // In real app, upload to server first then send URL
-      // Here we send a message with type audio + store the blob URL for local playback
-      const blobUrl = URL.createObjectURL(blob);
-      await sendVoiceMessage(blobUrl, duration, base64);
-    };
-  }
+// REPLACE onRecordingComplete with this:
+async function onRecordingComplete(blob) {
+  await uploadAudio(blob); // directly pass blob — no base64 needed
+}
+
+// REMOVE sendVoiceMessage entirely — it's no longer used
 
   return {
     start, stop, cancel,

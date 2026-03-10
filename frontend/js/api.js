@@ -94,7 +94,7 @@ const API = (() => {
     sendMessage:          b          => r('POST', '/messages', b),
     markRead:             id         => r('PUT',  `/messages/${id}/read`),
     markAllRead:          id         => r('PUT',  `/messages/chat/${id}/read`),
-    
+voicemessage: (formData) => r('POST', '/upload/audio', formData, true),
     // Push
     getVapidKey:          () => r('GET',  '/push/vapid-public-key'),
     subscribePush:        b  => r('POST', '/push/subscribe', b),
