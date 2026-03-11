@@ -1500,8 +1500,8 @@ function ac(s = '') {
   return COLORS[Math.abs(h) % COLORS.length];
 }
 
-const btn = document.getElementById('micBtn');
-btn.addEventListener('click', () => {
+const btn_pro = document.getElementById('micBtn');
+btn_pro.addEventListener('click', () => {
   toast('Audio recording feature is currently in testing and may not work perfectly. Please try again later.', 'info');
 
 });
