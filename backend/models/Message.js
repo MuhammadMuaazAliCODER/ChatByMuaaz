@@ -1,54 +1,45 @@
 import mongoose from 'mongoose';
 
 const MessageSchema = new mongoose.Schema({
-    chat: { 
-        type: mongoose.Schema.Types.ObjectId, 
+    chat: {
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'Chat',
         required: true
     },
-    sender: { 
-        type: mongoose.Schema.Types.ObjectId, 
+    sender: {
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
     },
     content: String,
-    type: { 
-        type: String, 
-        enum: ['text', 'voice'], 
-        default: 'text' 
+    type: {
+        type: String,
+        enum: ['text', 'voice', 'audio'],
+        default: 'text'
     },
     audioUrl: String,
-    
-    // Enhanced status tracking
+
+    // ── Edit tracking ─────────────────────────────────
+    edited:   { type: Boolean, default: false },
+    editedAt: { type: Date },
+
+    // ── Enhanced status tracking ──────────────────────
     status: {
         type: String,
         enum: ['sent', 'delivered', 'read'],
         default: 'sent'
     },
-    
-    // Track when message was delivered
-    deliveredAt: {
-        type: Date
-    },
-    
-    // Track when message was read
-    readAt: {
-        type: Date
-    },
-    
+    deliveredAt: { type: Date },
+    readAt:      { type: Date },
+
     // Legacy field for backward compatibility
-    read: { 
-        type: Boolean, 
-        default: false 
-    },
-    
+    read: { type: Boolean, default: false },
+
     expiresAt: Date
-}, { 
-    timestamps: true 
-});
+}, { timestamps: true });
 
 // Update read field when readAt is set
-MessageSchema.pre('save', function(next) {
+MessageSchema.pre('save', function (next) {
     if (this.readAt && !this.read) {
         this.read = true;
     }

@@ -101,19 +101,25 @@ function handleWSMessage(data) {
       if (APP.currentChatId) { APP._lastIds.clear(); loadMessages(); }
       break;
 
+    case 'message_edited':
+      if (APP.currentChatId) { APP._lastIds.clear(); loadMessages(); }
+      break;
+
+    case 'message_deleted':
+      if (APP.currentChatId) { APP._lastIds.clear(); loadMessages(); }
+      break;
+
     default:
       console.log('[WS] Unknown event:', data.type);
   }
 }
 
 // ── IN-APP NOTIFICATION BANNER ────────────────────────
-// FIX 1: Properly resolves sender name from cache + msg.sender object
 let _inAppTimer = null;
 
 function showInAppNotification(msg) {
   if (!msg) return;
 
-  // Resolve sender — merge msg.sender object with cache for best data
   const senderRaw = msg.sender || {};
   const senderId  = typeof senderRaw === 'object' ? senderRaw._id : senderRaw;
   const cached    = (senderId && APP._userCache[senderId]) || {};
@@ -273,6 +279,7 @@ function sendTyping(isTyping) {
 // ── BOOT ─────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   initEmojiBar();
+  injectMsgContextStyles();
   const restored = tryRestore();
   if (restored) {
     try {
@@ -579,6 +586,23 @@ async function refreshMsgs() {
   renderMessages(msgs);
 }
 
+// ── READ RECEIPT TICK RENDERER ────────────────────────
+// Returns tick HTML with proper status styling
+// ✓  = sent (grey)
+// ✓✓ = delivered (grey)
+// ✓✓ = read (blue)
+function renderTick(msg) {
+  const status = msg.status || (msg.read ? 'read' : msg.deliveredAt ? 'delivered' : 'sent');
+
+  if (status === 'read') {
+    return `<span class="mb-tick read" title="Seen" style="color:#3b82f6;font-size:13px;letter-spacing:-2px">✓✓</span>`;
+  } else if (status === 'delivered') {
+    return `<span class="mb-tick delivered" title="Delivered" style="color:var(--txt3,#888);font-size:13px;letter-spacing:-2px">✓✓</span>`;
+  } else {
+    return `<span class="mb-tick sent" title="Sent" style="color:var(--txt3,#888);font-size:13px">✓</span>`;
+  }
+}
+
 function renderMessages(msgs) {
   const area     = document.getElementById('msgs');
   const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
@@ -598,11 +622,14 @@ function renderMessages(msgs) {
 
     const isOut  = msg.sender?._id === APP.me._id || msg.sender === APP.me._id;
     const cls    = isOut ? 'mb-out' : 'mb-in';
-    const tick   = isOut
-      ? `<span class="mb-tick${msg.readBy?.length ? ' read' : ''}">${msg.readBy?.length ? '✓✓' : msg.deliveredTo?.length ? '✓✓' : '✓'}</span>`
+    const tick   = isOut ? renderTick(msg) : '';
+
+    // Edited label
+    const editedLabel = msg.edited
+      ? `<span style="font-size:10px;color:var(--txt3,#888);margin-right:4px;font-style:italic">edited</span>`
       : '';
-    const delBtn = `<button class="mb-del" onclick="doDelMsg('${msg._id}',event)">🗑</button>`;
-    const time   = fmtTime(msg.createdAt);
+
+    const time = fmtTime(msg.createdAt);
 
     let senderBlock = '';
     if (!isOut) {
@@ -622,10 +649,17 @@ function renderMessages(msgs) {
       ? renderVoiceBubble(msg)
       : `<div>${esc(msg.content || '')}</div>`;
 
-    html += `<div class="mb ${cls}">${delBtn}${senderBlock}${content}<div class="mb-foot"><span class="mb-time">${time}</span>${tick}</div></div>`;
+    // data attributes for long-press handler
+    const dataAttrs = `data-msg-id="${msg._id}" data-is-out="${isOut}" data-msg-type="${msg.type || 'text'}" data-content="${esc(msg.content || '')}"`;
+
+    html += `<div class="mb ${cls}" ${dataAttrs}>${senderBlock}${content}<div class="mb-foot">${editedLabel}<span class="mb-time">${time}</span>${tick}</div></div>`;
   });
 
   area.innerHTML = html;
+
+  // Attach long-press listeners to all message bubbles
+  area.querySelectorAll('.mb').forEach(el => attachMsgLongPress(el));
+
   if (atBottom || msgs.length < 8) area.scrollTop = area.scrollHeight;
 }
 
@@ -674,10 +708,294 @@ async function sendTextMsg() {
   else { ta.value = content; toast(r.data?.message || 'Failed to send', 'err'); }
 }
 
+// ── LONG-PRESS CONTEXT MENU ───────────────────────────
+// Inject CSS once
+function injectMsgContextStyles() {
+  if (document.getElementById('msgCtxStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'msgCtxStyles';
+  style.textContent = `
+    /* Context menu */
+    #msgCtxMenu {
+      position: fixed;
+      z-index: 10000;
+      background: var(--bg2, #1e1e2e);
+      border: 1px solid var(--bdr, #2a2a3a);
+      border-radius: 14px;
+      padding: 6px;
+      min-width: 180px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.55);
+      animation: ctxIn .15s cubic-bezier(.4,0,.2,1);
+    }
+    @keyframes ctxIn {
+      from { opacity:0; transform:scale(.92) translateY(-6px); }
+      to   { opacity:1; transform:scale(1) translateY(0); }
+    }
+    .ctx-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 9px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--txt, #e8e8f0);
+      transition: background .12s;
+      user-select: none;
+    }
+    .ctx-item:hover { background: var(--bgh, rgba(255,255,255,.07)); }
+    .ctx-item.danger { color: #ef4444; }
+    .ctx-item .ctx-icon { font-size: 16px; width: 20px; text-align: center; }
+
+    /* Inline edit bar */
+    #editMsgBar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg2, #1e1e2e);
+      border-top: 1px solid var(--acc, #6366f1);
+      animation: slideUp .15s ease;
+    }
+    @keyframes slideUp {
+      from { opacity:0; transform:translateY(8px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    #editMsgBar .edit-label {
+      font-size: 11px;
+      color: var(--acc, #6366f1);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    #editMsgBar input {
+      flex: 1;
+      background: var(--bg3, #2a2a3a);
+      border: 1px solid var(--bdr, #3a3a4a);
+      border-radius: 10px;
+      padding: 8px 12px;
+      color: var(--txt, #e8e8f0);
+      font-size: 14px;
+      outline: none;
+    }
+    #editMsgBar input:focus { border-color: var(--acc, #6366f1); }
+    #editMsgBar .edit-save {
+      background: var(--acc, #6366f1);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #editMsgBar .edit-cancel {
+      background: none;
+      border: none;
+      color: var(--txt2, #888);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 7px;
+    }
+    #editMsgBar .edit-cancel:hover { background: var(--bgh); }
+
+    /* Vibrate-like visual feedback on long-press trigger */
+    .mb.ctx-highlight {
+      outline: 2px solid var(--acc, #6366f1);
+      border-radius: 10px;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// Long-press state
+let _lpTimer       = null;
+let _lpActive      = false;
+let _lpStartX      = 0;
+let _lpStartY      = 0;
+let _currentCtxEl  = null;
+
+function attachMsgLongPress(el) {
+  const start = (cx, cy) => {
+    _lpStartX = cx; _lpStartY = cy; _lpActive = false;
+    _lpTimer = setTimeout(() => {
+      _lpActive = true;
+      el.classList.add('ctx-highlight');
+      setTimeout(() => el.classList.remove('ctx-highlight'), 500);
+      showMsgContextMenu(el);
+    }, 500);
+  };
+  const cancel = () => { clearTimeout(_lpTimer); };
+  const move   = (cx, cy) => {
+    if (Math.abs(cx - _lpStartX) > 10 || Math.abs(cy - _lpStartY) > 10) clearTimeout(_lpTimer);
+  };
+
+  // Touch
+  el.addEventListener('touchstart',  e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+  el.addEventListener('touchend',    cancel);
+  el.addEventListener('touchcancel', cancel);
+  el.addEventListener('touchmove',   e => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
+
+  // Mouse (desktop right-click also fine, but long-press for consistency)
+  el.addEventListener('mousedown',   e => { if (e.button === 0) start(e.clientX, e.clientY); });
+  el.addEventListener('mouseup',     cancel);
+  el.addEventListener('mouseleave',  cancel);
+  el.addEventListener('mousemove',   e => move(e.clientX, e.clientY));
+
+  // Right-click as shortcut on desktop
+  el.addEventListener('contextmenu', e => { e.preventDefault(); showMsgContextMenu(el, e.clientX, e.clientY); });
+}
+
+function showMsgContextMenu(el, forcedX, forcedY) {
+  closeMsgContextMenu();
+  _currentCtxEl = el;
+
+  const msgId   = el.dataset.msgId;
+  const isOut   = el.dataset.isOut === 'true';
+  const msgType = el.dataset.msgType || 'text';
+  const content = el.dataset.content || '';
+
+  const menu = document.createElement('div');
+  menu.id    = 'msgCtxMenu';
+
+  const items = [];
+
+  // Copy — always available for text messages
+  if (msgType !== 'audio') {
+    items.push({ icon: '📋', label: 'Copy', action: () => { navigator.clipboard?.writeText(content).catch(()=>{}); toast('Copied!'); } });
+  }
+
+  // Edit — only own text messages
+  if (isOut && msgType !== 'audio') {
+    items.push({ icon: '✏️', label: 'Edit', action: () => showEditBar(msgId, content) });
+  }
+
+  // Delete — only own messages
+  if (isOut) {
+    items.push({ icon: '🗑', label: 'Delete', danger: true, action: () => doDelMsg(msgId, new Event('click')) });
+  }
+
+  if (!items.length) { _currentCtxEl = null; return; }
+
+  menu.innerHTML = items.map((it, i) => `
+    <div class="ctx-item${it.danger ? ' danger' : ''}" data-idx="${i}">
+      <span class="ctx-icon">${it.icon}</span>
+      <span>${it.label}</span>
+    </div>
+  `).join('');
+
+  document.body.appendChild(menu);
+
+  // Position near element or forced coords
+  const rect   = el.getBoundingClientRect();
+  const menuW  = 200, menuH = items.length * 44 + 12;
+  let x = forcedX ?? (rect.left + rect.width / 2 - menuW / 2);
+  let y = forcedY ?? rect.top - menuH - 8;
+
+  // Keep in viewport
+  x = Math.max(8, Math.min(x, window.innerWidth  - menuW - 8));
+  y = Math.max(8, Math.min(y, window.innerHeight - menuH - 8));
+  if (y < 8) y = (forcedY ?? rect.bottom) + 8;
+
+  menu.style.left = x + 'px';
+  menu.style.top  = y + 'px';
+
+  // Bind item actions
+  menu.querySelectorAll('.ctx-item').forEach(itemEl => {
+    itemEl.addEventListener('click', () => {
+      const idx = parseInt(itemEl.dataset.idx);
+      closeMsgContextMenu();
+      items[idx]?.action();
+    });
+  });
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', closeMsgContextMenuOutside, { once: true });
+    document.addEventListener('touchstart', closeMsgContextMenuOutside, { once: true });
+  }, 0);
+}
+
+function closeMsgContextMenuOutside(e) {
+  const menu = document.getElementById('msgCtxMenu');
+  if (menu && !menu.contains(e.target)) closeMsgContextMenu();
+}
+
+function closeMsgContextMenu() {
+  const menu = document.getElementById('msgCtxMenu');
+  if (menu) menu.remove();
+  _currentCtxEl = null;
+}
+
+// ── EDIT MESSAGE ──────────────────────────────────────
+let _editingMsgId = null;
+
+function showEditBar(msgId, currentContent) {
+  closeEditBar();
+  _editingMsgId = msgId;
+
+  // Find the input bar container to insert the edit bar above it
+  const inputArea = document.getElementById('inputBar') || document.querySelector('.input-area, .msg-input-wrap, #msgInputWrap');
+
+  const bar = document.createElement('div');
+  bar.id    = 'editMsgBar';
+  bar.innerHTML = `
+    <span class="edit-label">✏️ Editing</span>
+    <input id="editMsgInput" type="text" value="${esc(currentContent)}" placeholder="Edit message…" maxlength="2000"/>
+    <button class="edit-cancel" onclick="closeEditBar()" title="Cancel">✕</button>
+    <button class="edit-save"   onclick="submitEditMsg()">Save</button>
+  `;
+
+  if (inputArea) {
+    inputArea.parentNode.insertBefore(bar, inputArea);
+  } else {
+    // fallback: append before msgs area bottom
+    const cwin = document.getElementById('cwin');
+    if (cwin) cwin.appendChild(bar);
+  }
+
+  const inp = document.getElementById('editMsgInput');
+  if (inp) {
+    inp.focus();
+    inp.setSelectionRange(inp.value.length, inp.value.length);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); submitEditMsg(); }
+      if (e.key === 'Escape') closeEditBar();
+    });
+  }
+}
+
+function closeEditBar() {
+  const bar = document.getElementById('editMsgBar');
+  if (bar) bar.remove();
+  _editingMsgId = null;
+}
+
+async function submitEditMsg() {
+  const inp     = document.getElementById('editMsgInput');
+  const content = inp?.value.trim();
+  if (!content || !_editingMsgId) return;
+  if (content === (inp?.dataset.original || '')) { closeEditBar(); return; }
+
+  const r = await API.editMessage(_editingMsgId, { content });
+  if (r.ok) {
+    closeEditBar();
+    APP._lastIds.clear();
+    await loadMessages();
+    toast('Message updated ✓', 'ok');
+  } else {
+    toast(r.data?.message || 'Failed to edit message', 'err');
+  }
+}
+
+// ── DELETE MESSAGE ────────────────────────────────────
 async function doDelMsg(id, e) {
-  e.stopPropagation();
+  if (e && e.stopPropagation) e.stopPropagation();
+  if (!confirm('Delete this message?')) return;
   const r = await API.deleteMsg(id);
-  if (r.ok) { APP._lastIds.clear(); loadMessages(); }
+  if (r.ok) { APP._lastIds.clear(); loadMessages(); toast('Message deleted', 'ok'); }
   else toast('Failed to delete', 'err');
 }
 
@@ -833,7 +1151,6 @@ async function loadIncomingReqs() {
   renderRequests(reqs);
 }
 
-// FIX 3: Incoming requests now show full user card — avatar, name, username, email
 function renderRequests(list) {
   const el = document.getElementById('reqList'); if (!el) return;
   if (!list.length) {
@@ -877,7 +1194,6 @@ async function doRespondReq(id, action) {
   } else toast(r.data?.message || 'Failed', 'err');
 }
 
-// FIX 2: Add Friend — live search with user cards before sending request
 let _afSearchTimer = null;
 
 function renderAddFriendPanel() {
@@ -977,10 +1293,8 @@ async function doSendFriendReq(userId, username, btn) {
   }
 }
 
-// Keep old doAddFriend as no-op so nothing breaks
 function doAddFriend() {}
 
-// Updated fpTab — renders Add Friend panel dynamically
 function fpTab(t) {
   ['mine','reqs','add'].forEach(id =>
     document.getElementById(`fp-${id}`).classList.toggle('hidden', id !== t)
@@ -1330,7 +1644,7 @@ async function toggleMic() {
 
 async function startRecording() {
   toast('Audio recording feature is currently in testing and may not work perfectly. Please try again later.', 'info');
- return;
+  return;
   if (!navigator.mediaDevices?.getUserMedia) {
     toast('Microphone not supported', 'err'); return;
   }
@@ -1347,7 +1661,7 @@ async function startRecording() {
       await uploadAudio(blob);
     };
 
- _mediaRecorder.start(250);
+    _mediaRecorder.start(250);
     _recSeconds = 0;
     showRecBar();
     _recTimer = setInterval(() => {
@@ -1408,49 +1722,22 @@ function hideRecBar() {
 }
 
 async function uploadAudio(blob) {
-  console.log('uploadAudio called');
-  console.log('currentChatId:', APP.currentChatId);  // ← check this
-  console.log('blob size:', blob?.size);
-
-  if (!APP.currentChatId) {
-    toast('No chat selected', 'err');
-    return;
-  }
-
-  if (!blob || blob.size === 0) {
-    toast('Recording was empty, please try again', 'err');
-    return;
-  }
+  if (!APP.currentChatId) { toast('No chat selected', 'err'); return; }
+  if (!blob || blob.size === 0) { toast('Recording was empty, please try again', 'err'); return; }
 
   const fd = new FormData();
   fd.append('audio', blob, 'voice.webm');
   const uploadRes = await API.voicemessage(fd);
-  console.log('upload response:', uploadRes);
 
-  if (!uploadRes.ok) {
-    toast(uploadRes.data?.message || 'Failed to upload audio', 'err');
-    return;
-  }
+  if (!uploadRes.ok) { toast(uploadRes.data?.message || 'Failed to upload audio', 'err'); return; }
 
   const audioUrl = uploadRes.data.url;
-  console.log('audioUrl:', audioUrl);  // ← check this
+  const msgRes   = await API.sendAudioMessage({ chatId: APP.currentChatId, type: 'audio', audioUrl, content: '🎤 Voice message' });
 
-  const msgRes = await API.sendAudioMessage({
-  chatId:   APP.currentChatId,
-  type:     'audio',
-  audioUrl: audioUrl,
-  content:  '🎤 Voice message',
-});
-  console.log('sendMessage response:', msgRes);  // ← check this
-
-  if (msgRes.ok) {
-    APP._lastIds.clear();
-    await loadMessages();
-    loadChats();
-  } else {
-    toast(msgRes.data?.message || 'Failed to send audio message', 'err');
-  }
+  if (msgRes.ok) { APP._lastIds.clear(); await loadMessages(); loadChats(); }
+  else toast(msgRes.data?.message || 'Failed to send audio message', 'err');
 }
+
 // ── LOGOUT ────────────────────────────────────────────
 async function doLogout() {
   disconnectWS();
@@ -1503,5 +1790,4 @@ function ac(s = '') {
 const btn_pro = document.getElementById('micBtn');
 btn_pro.addEventListener('click', () => {
   toast('Audio recording feature is currently in testing and may not work perfectly. Please try again later.', 'info');
-
 });
