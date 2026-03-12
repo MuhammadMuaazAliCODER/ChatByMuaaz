@@ -481,8 +481,14 @@ textarea{resize:none;line-height:1.55}
   display:flex;flex-wrap:wrap;gap:2px;padding:8px 12px;
   padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
   background:var(--bg2);border-bottom:1px solid var(--bdr);flex-shrink:0;font-size:22px;
-  max-height:160px;overflow-y:auto;
+  max-height:180px;overflow-y:scroll;
 }
+.emoji-bar::-webkit-scrollbar{width:5px}
+.emoji-bar::-webkit-scrollbar-track{background:var(--bg3);border-radius:4px}
+.emoji-bar::-webkit-scrollbar-thumb{background:var(--acc);border-radius:4px}
+.emoji-bar::-webkit-scrollbar-thumb:hover{background:var(--acc2)}
+/* Firefox */
+.emoji-bar{scrollbar-width:thin;scrollbar-color:var(--acc) var(--bg3)}
 .emoji-bar span{cursor:pointer;padding:4px;border-radius:7px;transition:background .1s}
 .emoji-bar span:hover{background:var(--bgh)}
 
