@@ -200,55 +200,79 @@
       <!-- Messages -->
       <div class="msgs" id="msgs"></div>
 
-      <!-- ① INPUT BAR -->
-      <div class="input-bar" id="inputBar">
-        <button class="emoji-toggle ib" onclick="toggleEmoji()" title="Emoji">😊</button>
-        <div class="ib-field">
-          <textarea
-            id="msgTa"
-            rows="1"
-            placeholder="Type a message…"
-            oninput="taResize(this)"
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTextMsg()}"
-          ></textarea>
+      <!--
+        INPUT AREA WRAPPER
+        ═══════════════════════════════════════════════
+        Groups: emoji bar + formatting toolbar + input bar + recording bar.
+        The wrapper is a flex column so each strip stacks naturally.
+        JS (markdown.js → FmtToolbar.build) will move the bars
+        inside this wrapper automatically at runtime.
+
+        If you prefer static HTML structure, the wrapper is already
+        here — markdown.js checks for #inputAreaWrap and skips
+        creating it if it already exists.
+        ═══════════════════════════════════════════════
+      -->
+      <div class="input-area-wrap" id="inputAreaWrap">
+
+        <!-- ③ EMOJI BAR — sits above the toolbar -->
+        <div class="emoji-bar hidden" id="emojiBar">
+          😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😗 😚 😙 🥲 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤧 🥵 🥶 🥴 😵 🤯 🤠 🥳 🥸 😎 🤓 🧐 😕 😟 🙁 ☹️ 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 ☠️ 💩 🤡 👹 👺 👻 👽 👾 🤖
+          👋 🤚 🖐️ ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 🖕 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦿 🦵 🦶 👂 🦻 👃 🫀 🫁 🧠 🦷 🦴 👀 👁️ 👅 👄 🫦
+          ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☯️ 🔥 💥 ✨ 🌟 💫 ⭐ 🌈 ☀️ 🌙 ⚡ ❄️ 🌊 💧 🫧
+          😺 😸 😹 😻 😼 😽 🙀 😿 😾 🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🐝 🪱 🐛 🦋 🐌 🐞 🐜 🦗 🕷️ 🦂 🐢 🐍 🦎 🦖 🦕 🐙 🦑 🦐 🦞 🦀 🐡 🐠 🐟 🐬 🐳 🐋 🦈 🐊 🐅 🐆 🦓 🦍 🦧 🦣 🐘 🦛 🦏 🐪 🐫 🦒 🦘 🦬 🐃 🐂 🐄 🐎 🐖 🐏 🐑 🦙 🐐 🦌 🐕 🐩 🦮 🐕‍🦺 🐈 🐈‍⬛ 🪶 🐓 🦃 🦤 🦚 🦜 🦢 🕊️ 🐇 🦝 🦨 🦡 🦫 🦦 🦥 🐁 🐀 🐿️ 🦔
+          🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🥬 🥒 🌶️ 🫑 🧄 🧅 🥔 🍠 🥐 🥯 🍞 🥖 🥨 🧀 🥚 🍳 🧈 🥞 🧇 🥓 🥩 🍗 🍖 🦴 🌭 🍔 🍟 🍕 🫓 🥪 🥙 🧆 🌮 🌯 🫔 🥗 🥘 🫕 🥫 🍝 🍜 🍲 🍛 🍣 🍱 🥟 🦪 🍤 🍙 🍚 🍘 🍥 🥮 🍢 🧁 🍰 🎂 🍮 🍭 🍬 🍫 🍿 🍩 🍪 🌰 🥜 🍯 🧃 🥤 🧋 🍵 ☕ 🫖 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🧉 🍾 🧊
+          ⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🥏 🎱 🏓 🏸 🥊 🥋 🎯 ⛳ 🎣 🤿 🎽 🎿 🛷 🥌 🎮 🕹️ 🎲 🧩 🃏 🀄 🎭 🎨 🎬 🎤 🎧 🎼 🎹 🪘 🥁 🎷 🎺 🎸 🪕 🎻 🎳
+          🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🛻 🚚 🚛 🚜 🛵 🏍️ 🚲 🛴 🛹 🛼 🚏 ✈️ 🚀 🛸 🚁 🛶 ⛵ 🚢 🏖️ 🏝️ 🌋 🏔️ 🗻 🏕️ 🏗️ 🏘️ 🏙️ 🌃 🌆 🌇 🌉
+          💎 💰 💵 💳 📱 💻 🖥️ ⌨️ 🖱️ 🖨️ 📷 📸 📹 🎥 📞 ☎️ 📟 📠 📺 📻 🧭 ⏱️ ⏰ 🕰️ ⌚ 💡 🔦 🕯️ 🪔 🧯 🛢️ 💸 💴 💵 🔑 🗝️ 🔐 🔒 🔓 🔨 🪓 ⛏️ ⚒️ 🛠️ 🗡️ ⚔️ 🛡️ 🪚 🔧 🪛 🔩 ⚙️ 🪤 🧲 🔮 🧿 💈 🪬 🧸 🪆 🖼️ 🪞 🪟 🛋️ 🚪 🧴 🧷 🧹 🧺 🧻 🪣 🧼 🫧 🪥 🧽 🪒 💊 💉 🩸 🩹 🩺 🌡️ 🧬 🦠 🧪 🧫 🧲
+          💯 🔥 ✅ ❎ ❌ ⭕ 🛑 ⛔ 📛 🚫 💤 🔞 📵 🚷 🚯 🚳 🚱 🔕 🔇 📴 📳 🔈 🔉 🔊 📢 📣 🔔 🔕 🎵 🎶 💬 💭 🗯️ 📌 📍 🗺️ 🧭 🏳️ 🏴 🚩 🎌 🏁
         </div>
-        <!-- Mic button — click to START recording -->
-        <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Voice message">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/>
-            <line x1="8"  y1="23" x2="16" y2="23"/>
-          </svg>
-        </button>
-        <button class="send-btn" onclick="sendTextMsg()" title="Send">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2 21 23 12 2 3v7l15 2-15 2z"/>
-          </svg>
-        </button>
-      </div>
 
-      <!-- ② RECORDING BAR — shown when recording starts -->
-      <div class="rec-bar hidden" id="recBar">
-        <div class="rec-dot"></div>
-        <span class="rec-time" id="recTime">0:00</span>
-        <span class="rec-hint">Recording… tap stop to send</span>
-        <!-- STOP button — stops recording AND sends the audio -->
-        <button class="stop-btn" onclick="stopAndSendRecording()" title="Stop &amp; Send">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-          </svg>
-        </button>
-        <!-- CANCEL button — discards the recording -->
-        <button class="rec-cancel" onclick="cancelRecording()">✕ Cancel</button>
-      </div>
+        <!-- ① INPUT BAR -->
+        <div class="input-bar" id="inputBar">
+          <button class="emoji-toggle ib" onclick="toggleEmoji()" title="Emoji">😊</button>
+          <div class="ib-field">
+            <textarea
+              id="msgTa"
+              rows="1"
+              placeholder="Type a message… (supports **bold**, *italic*, `code`, ```blocks```, > quotes, [links](url))"
+              oninput="taResize(this)"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTextMsg()}"
+            ></textarea>
+            <!-- Preview pane injected here by markdown.js -->
+          </div>
+          <!-- Mic button -->
+          <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Voice message">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8"  y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+          <button class="send-btn" onclick="sendTextMsg()" title="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2 21 23 12 2 3v7l15 2-15 2z"/>
+            </svg>
+          </button>
+        </div>
 
-      <!-- ③ EMOJI BAR -->
-      <div class="emoji-bar hidden" id="emojiBar">
-        😀 😂 😍 🥰 😎 🤔 😅 🙏 👍 🔥 ❤️ 💯 🎉 😭 🤣 😊 🥺 😏 👀 💀 🤧 🫠 🥴 🫩 🙄 😈 🔪
-      </div>
+        <!-- ② RECORDING BAR -->
+        <div class="rec-bar hidden" id="recBar">
+          <div class="rec-dot"></div>
+          <span class="rec-time" id="recTime">0:00</span>
+          <span class="rec-hint">Recording… tap stop to send</span>
+          <button class="stop-btn" onclick="stopAndSendRecording()" title="Stop &amp; Send">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+            </svg>
+          </button>
+          <button class="rec-cancel" onclick="cancelRecording()">✕ Cancel</button>
+        </div>
 
-    </div>
+      </div><!-- /input-area-wrap -->
+
+    </div><!-- /cwin -->
   </main>
 
   <!-- Mobile overlay + toggle -->
@@ -262,7 +286,6 @@
 <!-- ════════════════════════════════════
   MODALS
 ════════════════════════════════════ -->
-<!-- Generic modal -->
 <div class="modal-wrap hidden" id="mWrap" onclick="mOutside(event)">
   <div class="modal" id="mBox">
     <div class="modal-head"><span id="mTitle"></span><button class="ib" onclick="closeM()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
@@ -273,16 +296,11 @@
 <!-- SETTINGS DRAWER -->
 <div class="drawer-wrap hidden" id="drawerWrap" onclick="drawerOutside(event)">
   <div class="drawer" id="drawer">
-
-    <!-- Profile section -->
     <div class="drawer-head">
       <button class="ib" onclick="closeDrawer()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
       <span>Settings</span>
     </div>
-
     <div class="drawer-scroll">
-
-      <!-- Profile card -->
       <div class="prof-card">
         <div class="prof-av-wrap">
           <div class="av av-xl" id="drAv"></div>
@@ -298,8 +316,6 @@
         </div>
         <button class="btn-sm-outline" onclick="openEditProfile()">Edit Profile</button>
       </div>
-
-      <!-- Subscription card -->
       <div class="sub-card" id="subCard">
         <div class="sub-card-left">
           <div class="sub-badge" id="subBadge">FREE</div>
@@ -310,10 +326,7 @@
         </div>
         <button class="btn-upgrade" onclick="openPlans()">Upgrade ✨</button>
       </div>
-
-      <!-- Settings sections -->
       <div class="settings-list">
-
         <div class="sl-section">
           <div class="sl-title">Account</div>
           <div class="sl-item" onclick="openChangePassword()">
@@ -332,7 +345,6 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </div>
         </div>
-
         <div class="sl-section">
           <div class="sl-title">Subscription</div>
           <div class="sl-item" onclick="openPlans()">
@@ -351,7 +363,6 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </div>
         </div>
-
         <div class="sl-section">
           <div class="sl-title">Notifications</div>
           <div class="sl-item" onclick="enablePushNotifications()">
@@ -360,7 +371,6 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </div>
         </div>
-
         <div class="sl-section">
           <div class="sl-title">More</div>
           <div class="sl-item" onclick="openGroupCreate()">
@@ -373,9 +383,8 @@
             <div class="sl-text"><span>Sign Out</span></div>
           </div>
         </div>
-
       </div>
-    </div><!-- /drawer-scroll -->
+    </div>
   </div>
 </div>
 
@@ -387,5 +396,7 @@
 <script src="js/app.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/voice.js"></script>
+<!-- PATCH 3 & 4: Markdown renderer + formatting toolbar + keyboard fix -->
+<script src="js/markdown.js"></script>
 </body>
 </html>
