@@ -1,6 +1,6 @@
-const btn =  getElementById('micBtn');
-btn.addEventListener('click',() =>{
-    toast('Auio recording feature is currently in testing and may not work perfectly. Please try again later.', 'info');
+const btn_voice =  getElementById('micBtn');
+btn_voice.addEventListener('click',() =>{
+    toast('Audio recording feature is currently in testing and may not work perfectly. Please try again later.', 'info');
 });
 
 // ── VOICE RECORDING MODULE ───────────────────────────
