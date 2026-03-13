@@ -117,13 +117,48 @@ function handleWSMessage(data) {
 // ── IN-APP NOTIFICATION BANNER ────────────────────────
 let _inAppTimer = null;
 
-function showInAppNotification(msg) {
+// FIX 1: properly async + correctly unpacks res.data.users
+async function resolveUser(senderId) {
+  if (!senderId) return {};
+
+  // 1. Already cached
+  if (APP._userCache[senderId]) return APP._userCache[senderId];
+
+  // 2. Check chat member lists
+  for (const chat of (APP.chats || [])) {
+    const member = (chat.members || chat.participants || [])
+      .find(m => (m._id || m) === senderId);
+    if (member && (member.name || member.username)) {
+      APP._userCache[senderId] = member;
+      return member;
+    }
+  }
+
+  // 3. Fetch ALL users and cache — correctly unpacks { users: [...] } response
+  try {
+    const res = await API.getUsers();
+    if (res.ok) {
+      const users = res.data.users || res.data || [];
+      if (Array.isArray(users)) {
+        users.forEach(u => { if (u._id) APP._userCache[u._id] = u; });
+        if (APP._userCache[senderId]) return APP._userCache[senderId];
+      }
+    }
+  } catch (e) { /* silent fail */ }
+
+  return {};
+}
+
+async function showInAppNotification(msg) {
   if (!msg) return;
 
   const senderRaw = msg.sender || {};
   const senderId  = typeof senderRaw === 'object' ? senderRaw._id : senderRaw;
-  const cached    = (senderId && APP._userCache[senderId]) || {};
-  const sender    = { ...senderRaw, ...cached };
+
+  const resolved  = await resolveUser(senderId);
+  const sender    = typeof senderRaw === 'object'
+    ? { ...senderRaw, ...resolved }
+    : resolved;
 
   const name    = sender.name || sender.username || 'Someone';
   const pic     = sender.profilePicture || '';
@@ -587,13 +622,8 @@ async function refreshMsgs() {
 }
 
 // ── READ RECEIPT TICK RENDERER ────────────────────────
-// Returns tick HTML with proper status styling
-// ✓  = sent (grey)
-// ✓✓ = delivered (grey)
-// ✓✓ = read (blue)
 function renderTick(msg) {
   const status = msg.status || (msg.read ? 'read' : msg.deliveredAt ? 'delivered' : 'sent');
-
   if (status === 'read') {
     return `<span class="mb-tick read" title="Seen" style="color:#3b82f6;font-size:13px;letter-spacing:-2px">✓✓</span>`;
   } else if (status === 'delivered') {
@@ -624,7 +654,6 @@ function renderMessages(msgs) {
     const cls    = isOut ? 'mb-out' : 'mb-in';
     const tick   = isOut ? renderTick(msg) : '';
 
-    // Edited label
     const editedLabel = msg.edited
       ? `<span style="font-size:10px;color:var(--txt3,#888);margin-right:4px;font-style:italic">edited</span>`
       : '';
@@ -649,17 +678,13 @@ function renderMessages(msgs) {
       ? renderVoiceBubble(msg)
       : `<div>${esc(msg.content || '')}</div>`;
 
-    // data attributes for long-press handler
     const dataAttrs = `data-msg-id="${msg._id}" data-is-out="${isOut}" data-msg-type="${msg.type || 'text'}" data-content="${esc(msg.content || '')}"`;
 
     html += `<div class="mb ${cls}" ${dataAttrs}>${senderBlock}${content}<div class="mb-foot">${editedLabel}<span class="mb-time">${time}</span>${tick}</div></div>`;
   });
 
   area.innerHTML = html;
-
-  // Attach long-press listeners to all message bubbles
   area.querySelectorAll('.mb').forEach(el => attachMsgLongPress(el));
-
   if (atBottom || msgs.length < 8) area.scrollTop = area.scrollHeight;
 }
 
@@ -709,13 +734,11 @@ async function sendTextMsg() {
 }
 
 // ── LONG-PRESS CONTEXT MENU ───────────────────────────
-// Inject CSS once
 function injectMsgContextStyles() {
   if (document.getElementById('msgCtxStyles')) return;
   const style = document.createElement('style');
   style.id = 'msgCtxStyles';
   style.textContent = `
-    /* Context menu */
     #msgCtxMenu {
       position: fixed;
       z-index: 10000;
@@ -748,7 +771,6 @@ function injectMsgContextStyles() {
     .ctx-item.danger { color: #ef4444; }
     .ctx-item .ctx-icon { font-size: 16px; width: 20px; text-align: center; }
 
-    /* Inline edit bar */
     #editMsgBar {
       display: flex;
       align-items: center;
@@ -801,7 +823,6 @@ function injectMsgContextStyles() {
     }
     #editMsgBar .edit-cancel:hover { background: var(--bgh); }
 
-    /* Vibrate-like visual feedback on long-press trigger */
     .mb.ctx-highlight {
       outline: 2px solid var(--acc, #6366f1);
       border-radius: 10px;
@@ -810,13 +831,13 @@ function injectMsgContextStyles() {
   document.head.appendChild(style);
 }
 
-// Long-press state
 let _lpTimer       = null;
 let _lpActive      = false;
 let _lpStartX      = 0;
 let _lpStartY      = 0;
 let _currentCtxEl  = null;
 
+// FIX 2: right-click on desktop + long-press on mobile
 function attachMsgLongPress(el) {
   const start = (cx, cy) => {
     _lpStartX = cx; _lpStartY = cy; _lpActive = false;
@@ -832,20 +853,23 @@ function attachMsgLongPress(el) {
     if (Math.abs(cx - _lpStartX) > 10 || Math.abs(cy - _lpStartY) > 10) clearTimeout(_lpTimer);
   };
 
-  // Touch
+  // Touch (mobile long-press)
   el.addEventListener('touchstart',  e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
   el.addEventListener('touchend',    cancel);
   el.addEventListener('touchcancel', cancel);
   el.addEventListener('touchmove',   e => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
 
-  // Mouse (desktop right-click also fine, but long-press for consistency)
+  // Mouse long-press (desktop fallback)
   el.addEventListener('mousedown',   e => { if (e.button === 0) start(e.clientX, e.clientY); });
   el.addEventListener('mouseup',     cancel);
   el.addEventListener('mouseleave',  cancel);
   el.addEventListener('mousemove',   e => move(e.clientX, e.clientY));
 
-  // Right-click as shortcut on desktop
-  el.addEventListener('contextmenu', e => { e.preventDefault(); showMsgContextMenu(el, e.clientX, e.clientY); });
+  // RIGHT-CLICK on desktop — instant menu, no holding needed
+  el.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    showMsgContextMenu(el, e.clientX, e.clientY);
+  });
 }
 
 function showMsgContextMenu(el, forcedX, forcedY) {
@@ -862,17 +886,14 @@ function showMsgContextMenu(el, forcedX, forcedY) {
 
   const items = [];
 
-  // Copy — always available for text messages
   if (msgType !== 'audio') {
     items.push({ icon: '📋', label: 'Copy', action: () => { navigator.clipboard?.writeText(content).catch(()=>{}); toast('Copied!'); } });
   }
 
-  // Edit — only own text messages
   if (isOut && msgType !== 'audio') {
     items.push({ icon: '✏️', label: 'Edit', action: () => showEditBar(msgId, content) });
   }
 
-  // Delete — only own messages
   if (isOut) {
     items.push({ icon: '🗑', label: 'Delete', danger: true, action: () => doDelMsg(msgId, new Event('click')) });
   }
@@ -888,13 +909,11 @@ function showMsgContextMenu(el, forcedX, forcedY) {
 
   document.body.appendChild(menu);
 
-  // Position near element or forced coords
   const rect   = el.getBoundingClientRect();
   const menuW  = 200, menuH = items.length * 44 + 12;
   let x = forcedX ?? (rect.left + rect.width / 2 - menuW / 2);
   let y = forcedY ?? rect.top - menuH - 8;
 
-  // Keep in viewport
   x = Math.max(8, Math.min(x, window.innerWidth  - menuW - 8));
   y = Math.max(8, Math.min(y, window.innerHeight - menuH - 8));
   if (y < 8) y = (forcedY ?? rect.bottom) + 8;
@@ -902,7 +921,6 @@ function showMsgContextMenu(el, forcedX, forcedY) {
   menu.style.left = x + 'px';
   menu.style.top  = y + 'px';
 
-  // Bind item actions
   menu.querySelectorAll('.ctx-item').forEach(itemEl => {
     itemEl.addEventListener('click', () => {
       const idx = parseInt(itemEl.dataset.idx);
@@ -911,7 +929,6 @@ function showMsgContextMenu(el, forcedX, forcedY) {
     });
   });
 
-  // Close on outside click
   setTimeout(() => {
     document.addEventListener('click', closeMsgContextMenuOutside, { once: true });
     document.addEventListener('touchstart', closeMsgContextMenuOutside, { once: true });
@@ -936,7 +953,6 @@ function showEditBar(msgId, currentContent) {
   closeEditBar();
   _editingMsgId = msgId;
 
-  // Find the input bar container to insert the edit bar above it
   const inputArea = document.getElementById('inputBar') || document.querySelector('.input-area, .msg-input-wrap, #msgInputWrap');
 
   const bar = document.createElement('div');
@@ -951,7 +967,6 @@ function showEditBar(msgId, currentContent) {
   if (inputArea) {
     inputArea.parentNode.insertBefore(bar, inputArea);
   } else {
-    // fallback: append before msgs area bottom
     const cwin = document.getElementById('cwin');
     if (cwin) cwin.appendChild(bar);
   }
