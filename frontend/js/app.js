@@ -117,7 +117,6 @@ function handleWSMessage(data) {
 // ── IN-APP NOTIFICATION BANNER ────────────────────────
 let _inAppTimer = null;
 
-// FIX 1: properly async + correctly unpacks res.data.users
 async function resolveUser(senderId) {
   if (!senderId) return {};
 
@@ -155,7 +154,17 @@ async function showInAppNotification(msg) {
   const senderRaw = msg.sender || {};
   const senderId  = typeof senderRaw === 'object' ? senderRaw._id : senderRaw;
 
-  const resolved  = await resolveUser(senderId);
+  // Fast path: pull sender directly from already-loaded chat participants.
+  // This avoids showing "Someone" when the user isn't in the cache yet,
+  // because /chats already returns participants with name + username populated.
+  let participantMatch = null;
+  if (senderId) {
+    const chat = APP.chats.find(c => c._id === msg.chatId);
+    participantMatch = (chat?.participants || [])
+      .find(p => (p._id || p) === senderId && (p.name || p.username));
+  }
+
+  const resolved  = participantMatch || await resolveUser(senderId);
   const sender    = typeof senderRaw === 'object'
     ? { ...senderRaw, ...resolved }
     : resolved;
@@ -837,7 +846,6 @@ let _lpStartX      = 0;
 let _lpStartY      = 0;
 let _currentCtxEl  = null;
 
-// FIX 2: right-click on desktop + long-press on mobile
 function attachMsgLongPress(el) {
   const start = (cx, cy) => {
     _lpStartX = cx; _lpStartY = cy; _lpActive = false;
