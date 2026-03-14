@@ -133,7 +133,7 @@ async function resolveUser(senderId) {
     }
   }
 
-  // 3. Fetch ALL users and cache — correctly unpacks { users: [...] } response
+  // 3. Fetch ALL users and cache
   try {
     const res = await API.getUsers();
     if (res.ok) {
@@ -148,27 +148,90 @@ async function resolveUser(senderId) {
   return {};
 }
 
+// ── ROBUST SENDER RESOLVER FOR NOTIFICATIONS ──────────
+// Tries every possible location to find the sender's name.
+// Works even when msg.sender is just an ID string.
+async function resolveSenderForNotif(msg) {
+  // ── DEBUG: log the raw WS message so we can see the format ──
+  console.log('[Notif] raw msg:', JSON.stringify(msg));
+
+  const senderRaw = msg.sender;
+
+  // Extract the ID whether sender is an object or a plain string
+  const senderId = senderRaw
+    ? (typeof senderRaw === 'object' ? (senderRaw._id || senderRaw.id) : String(senderRaw))
+    : null;
+
+  console.log('[Notif] senderId:', senderId, '| chatId:', msg.chatId);
+  console.log('[Notif] chats loaded:', APP.chats.length, '| cache size:', Object.keys(APP._userCache).length);
+
+  // 1. If sender object already has a name, use it directly
+  if (typeof senderRaw === 'object' && senderRaw !== null) {
+    const name = senderRaw.name || senderRaw.username;
+    if (name) {
+      console.log('[Notif] resolved from sender object:', name);
+      return senderRaw;
+    }
+  }
+
+  // 2. Check user cache by ID
+  if (senderId && APP._userCache[senderId]) {
+    const u = APP._userCache[senderId];
+    if (u.name || u.username) {
+      console.log('[Notif] resolved from cache:', u.name || u.username);
+      return u;
+    }
+  }
+
+  // 3. Look through chat participants — check ALL chats, not just matching chatId
+  //    (in case chatId field name differs in the WS payload)
+  if (senderId) {
+    for (const chat of (APP.chats || [])) {
+      for (const p of (chat.participants || chat.members || [])) {
+        const pid = typeof p === 'object' ? (p._id || p.id) : p;
+        if (pid === senderId && typeof p === 'object' && (p.name || p.username)) {
+          console.log('[Notif] resolved from participants (chat', chat._id, '):', p.name || p.username);
+          APP._userCache[senderId] = p;
+          return p;
+        }
+      }
+    }
+  }
+
+  // 4. Try matching chatId with multiple possible field names
+  const possibleChatId = msg.chatId || msg.chat || msg.room || msg.channel;
+  if (senderId && possibleChatId) {
+    const chat = APP.chats.find(c => c._id === possibleChatId || c.id === possibleChatId);
+    if (chat) {
+      const p = (chat.participants || chat.members || [])
+        .find(m => {
+          const mid = typeof m === 'object' ? (m._id || m.id) : m;
+          return mid === senderId && typeof m === 'object' && (m.name || m.username);
+        });
+      if (p) {
+        console.log('[Notif] resolved via possibleChatId:', p.name || p.username);
+        APP._userCache[senderId] = p;
+        return p;
+      }
+    }
+  }
+
+  // 5. Last resort: fetch users from API
+  console.log('[Notif] falling back to API fetch for sender:', senderId);
+  const resolved = await resolveUser(senderId);
+  if (resolved && (resolved.name || resolved.username)) {
+    console.log('[Notif] resolved from API:', resolved.name || resolved.username);
+    return resolved;
+  }
+
+  console.warn('[Notif] could not resolve sender for ID:', senderId);
+  return typeof senderRaw === 'object' ? (senderRaw || {}) : {};
+}
+
 async function showInAppNotification(msg) {
   if (!msg) return;
 
-  const senderRaw = msg.sender || {};
-  const senderId  = typeof senderRaw === 'object' ? senderRaw._id : senderRaw;
-
-  // Fast path: pull sender directly from already-loaded chat participants.
-  // This avoids showing "Someone" when the user isn't in the cache yet,
-  // because /chats already returns participants with name + username populated.
-  let participantMatch = null;
-  if (senderId) {
-    const chat = APP.chats.find(c => c._id === msg.chatId);
-    participantMatch = (chat?.participants || [])
-      .find(p => (p._id || p) === senderId && (p.name || p.username));
-  }
-
-  const resolved  = participantMatch || await resolveUser(senderId);
-  const sender    = typeof senderRaw === 'object'
-    ? { ...senderRaw, ...resolved }
-    : resolved;
-
+  const sender  = await resolveSenderForNotif(msg);
   const name    = sender.name || sender.username || 'Someone';
   const pic     = sender.profilePicture || '';
   const letter  = name[0]?.toUpperCase() || '?';
@@ -208,10 +271,11 @@ async function showInAppNotification(msg) {
   notif.onclick = (e) => {
     if (e.target.closest('button')) return;
     dismissInAppNotif();
-    const chat = APP.chats.find(c => c._id === msg.chatId);
+    const chatId = msg.chatId || msg.chat || msg.room;
+    const chat = APP.chats.find(c => c._id === chatId);
     if (chat) openChat(chat._id, chatName(chat), chat.type || 'direct');
     else loadChats().then(() => {
-      const c2 = APP.chats.find(c => c._id === msg.chatId);
+      const c2 = APP.chats.find(c => c._id === chatId);
       if (c2) openChat(c2._id, chatName(c2), c2.type || 'direct');
     });
   };
@@ -861,19 +925,16 @@ function attachMsgLongPress(el) {
     if (Math.abs(cx - _lpStartX) > 10 || Math.abs(cy - _lpStartY) > 10) clearTimeout(_lpTimer);
   };
 
-  // Touch (mobile long-press)
   el.addEventListener('touchstart',  e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
   el.addEventListener('touchend',    cancel);
   el.addEventListener('touchcancel', cancel);
   el.addEventListener('touchmove',   e => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
 
-  // Mouse long-press (desktop fallback)
   el.addEventListener('mousedown',   e => { if (e.button === 0) start(e.clientX, e.clientY); });
   el.addEventListener('mouseup',     cancel);
   el.addEventListener('mouseleave',  cancel);
   el.addEventListener('mousemove',   e => move(e.clientX, e.clientY));
 
-  // RIGHT-CLICK on desktop — instant menu, no holding needed
   el.addEventListener('contextmenu', e => {
     e.preventDefault();
     showMsgContextMenu(el, e.clientX, e.clientY);
