@@ -32,6 +32,7 @@ export const sendMessage = async (req, res) => {
         });
 
         await message.save();
+        // Populate sender so message.sender is a full object before we use it below
         await message.populate('sender', 'name username profilePicture');
 
         chat.lastMessage = message._id;
@@ -52,8 +53,16 @@ export const sendMessage = async (req, res) => {
                 chatId: chatId,
                 content: message.content,
                 type: message.type,
-                senderName: req.user.name,
-                senderAvatar: req.user.profilePicture,
+             
+                sender: {
+                    _id: message.sender._id,
+                    name: message.sender.name,
+                    username: message.sender.username,
+                    profilePicture: message.sender.profilePicture
+                },
+              
+                senderName: message.sender.name,
+                senderAvatar: message.sender.profilePicture,
                 createdAt: message.createdAt
             });
         }
@@ -69,9 +78,7 @@ export const sendMessage = async (req, res) => {
     }
 };
 
-// ── EDIT MESSAGE ─────────────────────────────────────
-// PUT /messages/:messageId
-// Only the sender can edit their own text messages
+
 export const editMessage = async (req, res) => {
     try {
         const { messageId } = req.params;
@@ -88,12 +95,12 @@ export const editMessage = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Message not found' });
         }
 
-        // Only sender can edit
+    
         if (message.sender._id.toString() !== userId.toString()) {
             return res.status(403).json({ success: false, message: 'You can only edit your own messages' });
         }
 
-        // Cannot edit audio/voice messages
+    
         if (message.type === 'audio' || message.type === 'voice') {
             return res.status(400).json({ success: false, message: 'Voice messages cannot be edited' });
         }
