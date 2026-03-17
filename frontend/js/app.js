@@ -108,7 +108,21 @@ function handleWSMessage(data) {
     case 'message_deleted':
       if (APP.currentChatId) { APP._lastIds.clear(); loadMessages(); }
       break;
+       
+case 'friend_request': {
+  const req = data.request;
+  loadIncomingReqs(); 
+  const name = req.sender?.name || req.sender?.username || 'Someone';
+  toast(`👋 ${name} sent you a friend request!`, 'ok', 5000);
+  break;
+}
 
+case 'friend_accepted': {
+  toast(`🎉 ${data.friendName || 'Someone'} accepted your friend request!`, 'ok', 5000);
+  loadFriends();
+  loadChats();
+  break;
+}
     default:
       console.log('[WS] Unknown event:', data.type);
   }
