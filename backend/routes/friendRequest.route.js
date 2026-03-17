@@ -6,7 +6,7 @@ import User from '../models/User.js';
 import FriendRequest from '../models/FriendRequest.js';
 import Chat from '../models/Chat.js';
 import { checkFriendLimit } from '../middleware/checkFriendLimit.js';
-import { sendToUser } from '../socket/socket.js'; // ← ADD THIS IMPORT (adjust path)
+import { sendToUser } from '../websocket/socket.js'; // ← ADD THIS IMPORT (adjust path)
 
 const router = Router();
 
