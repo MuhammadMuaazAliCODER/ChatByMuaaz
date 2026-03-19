@@ -65,9 +65,9 @@ app.use("/api/email", emailRoutes);
 app.use("/api/push",pushroutes)
 app.use("/api/upload", audioroutes);
 app.use('/api/subscription', subscriptionRoutes);
-app.use('/uploads', express.static('uploads'));   // serve audio files publicly
+app.use('/uploads', express.static('uploads'));  
 app.use('/upload',  uploadRoutes); 
-// Health check endpoint
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
