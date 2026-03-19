@@ -19,6 +19,11 @@ import emailRoutes from "./routes/email.routes.js";
 import pushroutes from "./routes/push.routes.js"
 import audioroutes from "./routes/upload.routes.js";
 import subscriptionRoutes from './routes/subscription.routes.js';
+ 
+import uploadRoutes from './routes/upload.routes.js';
+ 
+// Place these with your other app.use() route registrations:
+ 
 
 const app = express();
 const server = http.createServer(app);
@@ -60,7 +65,8 @@ app.use("/api/email", emailRoutes);
 app.use("/api/push",pushroutes)
 app.use("/api/upload", audioroutes);
 app.use('/api/subscription', subscriptionRoutes);
-
+app.use('/uploads', express.static('uploads'));   // serve audio files publicly
+app.use('/upload',  uploadRoutes); 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
