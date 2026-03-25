@@ -3,7 +3,10 @@ import authenticateToken from '../middleware/auth.middleware.js';
 import { checkMessageLimit } from '../middleware/checkMessageLimit.js';
 import {
     sendMessage,
-    editMessage,       // ← NEW
+    scheduleMessage,
+    getScheduledMessages,
+    cancelScheduledMessage,
+    editMessage,
     getMessages,
     markAsDelivered,
     markAsRead,
@@ -13,25 +16,19 @@ import {
 
 const router = express.Router();
 
-// Send a message — checkMessageLimit blocks if monthly quota is exceeded
-router.post('/',                        authenticateToken, checkMessageLimit, sendMessage);
+// ─── Regular messages ─────────────────────────────────────────────────────────
+router.post('/',                            authenticateToken, checkMessageLimit, sendMessage);
+router.get('/:chatId',                      authenticateToken, getMessages);
+router.put('/:messageId',                   authenticateToken, editMessage);
+router.put('/:messageId/delivered',         authenticateToken, markAsDelivered);
+router.put('/:messageId/read',              authenticateToken, markAsRead);
+router.put('/chat/:chatId/read',            authenticateToken, markChatAsRead);
+router.delete('/:messageId',               authenticateToken, deleteMessage);
 
-// Get messages for a chat
-router.get('/:chatId',                  authenticateToken, getMessages);
-
-// Edit a message (sender only, text messages only)
-router.put('/:messageId',               authenticateToken, editMessage);        // ← NEW
-
-// Mark message as delivered
-router.put('/:messageId/delivered',     authenticateToken, markAsDelivered);
-
-// Mark message as read
-router.put('/:messageId/read',          authenticateToken, markAsRead);
-
-// Mark all messages in chat as read
-router.put('/chat/:chatId/read',        authenticateToken, markChatAsRead);
-
-// Delete a message
-router.delete('/:messageId',            authenticateToken, deleteMessage);
+// ─── Scheduled messages ───────────────────────────────────────────────────────
+// NOTE: keep /schedule and /scheduled ABOVE /:messageId routes to avoid param collision
+router.post('/schedule',                    authenticateToken, scheduleMessage);
+router.get('/scheduled/list',               authenticateToken, getScheduledMessages);
+router.put('/:messageId/cancel-schedule',   authenticateToken, cancelScheduledMessage);
 
 export default router;

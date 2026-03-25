@@ -35,10 +35,20 @@ const MessageSchema = new mongoose.Schema({
     // Legacy field for backward compatibility
     read: { type: Boolean, default: false },
 
+    // ── Scheduled message fields ──────────────────────
+    isScheduled:    { type: Boolean, default: false },
+    scheduledAt:    { type: Date },                                              // when to fire
+    scheduledFor:   [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],    // extra recipients (optional)
+    scheduleStatus: {
+        type: String,
+        enum: ['pending', 'sent', 'cancelled'],
+        default: 'pending'
+    },
+
     expiresAt: Date
 }, { timestamps: true });
 
-// Update read field when readAt is set
+// ── Hooks ─────────────────────────────────────────────
 MessageSchema.pre('save', function (next) {
     if (this.readAt && !this.read) {
         this.read = true;
@@ -46,7 +56,10 @@ MessageSchema.pre('save', function (next) {
     next();
 });
 
+// ── Indexes ───────────────────────────────────────────
 MessageSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 MessageSchema.index({ chat: 1, createdAt: -1 });
+MessageSchema.index({ scheduledAt: 1, scheduleStatus: 1 });  
+MessageSchema.index({ sender: 1, isScheduled: 1, scheduleStatus: 1 });
 
 export default mongoose.model('Message', MessageSchema);

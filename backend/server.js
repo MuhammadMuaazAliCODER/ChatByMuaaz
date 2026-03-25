@@ -22,6 +22,7 @@ import subscriptionRoutes from './routes/subscription.routes.js';
  
 import uploadRoutes from './routes/upload.routes.js';
  
+import {startMessageScheduler} from './background_tasks/Messagescheduler.js';
 // Place these with your other app.use() route registrations:
  
 
@@ -52,6 +53,7 @@ app.use('/uploads', express.static('uploads'));
 
 // Connect to database and initialize WebSocket
 connectDB(); 
+startMessageScheduler();
 initSocket(server);
 
 // Routes
