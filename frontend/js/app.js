@@ -762,8 +762,8 @@ function renderMessages(msgs) {
     }
 
     const content = (msg.type === 'audio' || msg.audioUrl)
-      ? renderVoiceBubble(msg)
-      : `<div>${esc(msg.content || '')}</div>`;
+  ? renderVoiceBubble(msg)
+  : `<div class="msg-text">${renderMsgContent(msg.content || '')}</div>`;
 
     const dataAttrs = `data-msg-id="${msg._id}" data-is-out="${isOut}" data-msg-type="${msg.type || 'text'}" data-content="${esc(msg.content || '')}"`;
 

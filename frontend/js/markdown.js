@@ -1,35 +1,34 @@
 /* ═══════════════════════════════════════════════════════
-   markdown.js  —  Lightweight Markdown Renderer + Toolbar
-   Drop this file in js/markdown.js and add:
+   markdown.js  —  Auto Markdown Renderer (Slack-style)
+   Add AFTER app.js in your HTML:
      <script src="js/markdown.js"></script>
-   before </body> in index.html (after app.js)
 ═══════════════════════════════════════════════════════ */
 
 /* ─────────────────────────────────────────────────────
    1.  MARKDOWN → HTML RENDERER
-   Supports: bold, italic, inline code, code blocks,
-   unordered/ordered lists, blockquotes, links, hr, headings.
 ───────────────────────────────────────────────────── */
 const MD = (() => {
   function esc(s) {
     return String(s)
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;');
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   function parseInline(s) {
-    // Inline code  `code`
-    s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${esc(c)}</code>`);
-    // Bold  **text** or __text__
-    s = s.replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_, a, b) => `<strong>${a||b}</strong>`);
-    // Italic  *text* or _text_
-    s = s.replace(/\*(.+?)\*|_([^_]+?)_/g, (_, a, b) => `<em>${a||b}</em>`);
-    // Links  [label](url)
+    // Inline code — must come first so other rules don't touch content inside backticks
+    s = s.replace(/`([^`]+)`/g, (_, c) => `<code class="md-code">${esc(c)}</code>`);
+    // Bold
+    s = s.replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_, a, b) => `<strong>${a || b}</strong>`);
+    // Italic
+    s = s.replace(/\*(.+?)\*|_([^_]+?)_/g, (_, a, b) => `<em>${a || b}</em>`);
+    // Strikethrough
+    s = s.replace(/~~(.+?)~~/g, (_, a) => `<del>${a}</del>`);
+    // Named links  [label](url)
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
       (_, label, url) => `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`);
-    // Auto-link bare URLs
+    // Auto-links
     s = s.replace(/(^|[\s,;])(https?:\/\/[^\s<]+)/g,
       (_, pre, url) => `${pre}<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`);
     return s;
@@ -37,7 +36,6 @@ const MD = (() => {
 
   function render(raw) {
     if (!raw || !raw.trim()) return '';
-
     const lines = raw.split('\n');
     let html = '';
     let i = 0;
@@ -45,7 +43,7 @@ const MD = (() => {
     while (i < lines.length) {
       const line = lines[i];
 
-      // ── Fenced code block ```lang\n...\n```
+      // Fenced code block  ```lang
       if (/^```/.test(line)) {
         const lang = line.slice(3).trim();
         let code = '';
@@ -54,39 +52,33 @@ const MD = (() => {
           code += esc(lines[i]) + '\n';
           i++;
         }
-        html += `<pre><code class="lang-${esc(lang)}">${code}</code></pre>`;
+        html += `<pre class="md-pre"><code class="lang-${esc(lang)}">${code}</code></pre>`;
         i++;
         continue;
       }
 
-      // ── Headings  # ## ###
+      // Headings  # ## ###
       const hMatch = line.match(/^(#{1,3})\s+(.+)/);
       if (hMatch) {
         const lvl = hMatch[1].length;
-        html += `<h${lvl}>${parseInline(esc(hMatch[2]))}</h${lvl}>`;
+        html += `<h${lvl} class="md-h">${parseInline(esc(hMatch[2]))}</h${lvl}>`;
         i++; continue;
       }
 
-      // ── Horizontal rule  --- or ***
-      if (/^[-*]{3,}$/.test(line.trim())) {
-        html += '<hr>';
-        i++; continue;
-      }
-
-      // ── Blockquote  > text
+      // Blockquote  > text
       if (/^>\s?/.test(line)) {
         let bq = '';
         while (i < lines.length && /^>\s?/.test(lines[i])) {
           bq += lines[i].replace(/^>\s?/, '') + '\n';
           i++;
         }
-        html += `<blockquote>${render(bq.trim())}</blockquote>`;
+        html += `<blockquote class="md-bq">${render(bq.trim())}</blockquote>`;
         continue;
       }
 
-      // ── Unordered list  - item or * item
+      // Unordered list  - item  or  * item
       if (/^[-*]\s/.test(line)) {
-        html += '<ul>';
+        html += '<ul class="md-ul">';
         while (i < lines.length && /^[-*]\s/.test(lines[i])) {
           html += `<li>${parseInline(esc(lines[i].replace(/^[-*]\s/, '')))}</li>`;
           i++;
@@ -95,9 +87,9 @@ const MD = (() => {
         continue;
       }
 
-      // ── Ordered list  1. item
+      // Ordered list  1. item
       if (/^\d+\.\s/.test(line)) {
-        html += '<ol>';
+        html += '<ol class="md-ol">';
         while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
           html += `<li>${parseInline(esc(lines[i].replace(/^\d+\.\s/, '')))}</li>`;
           i++;
@@ -106,23 +98,22 @@ const MD = (() => {
         continue;
       }
 
-      // ── Blank line → paragraph break
+      // Blank line → break
       if (!line.trim()) {
         html += '<br>';
         i++; continue;
       }
 
-      // ── Normal paragraph
-      html += `<p>${parseInline(esc(line))}</p>`;
+      // Normal line
+      html += `<span class="md-line">${parseInline(esc(line))}</span><br>`;
       i++;
     }
 
-    return `<div class="md-content">${html}</div>`;
+    return html;
   }
 
-  // Returns true when the string contains any markdown syntax
   function hasMarkdown(s) {
-    return /\*\*|__|\*[^*]|`|^#{1,3}\s|^[-*]\s|\[.+\]\(.+\)|^>|^[-*]{3}/m.test(s);
+    return /\*\*|__|\*[^*\s]|_[^_\s]|`|^#{1,3}\s|^[-*]\s|^\d+\.\s|\[.+\]\(.+\)|^>|~~.+~~/m.test(s);
   }
 
   return { render, hasMarkdown, parseInline, esc };
@@ -130,278 +121,149 @@ const MD = (() => {
 
 
 /* ─────────────────────────────────────────────────────
-   2.  FORMATTING TOOLBAR  (injected into the DOM)
+   2.  renderMsgContent  — called directly from app.js
+   Plain text → safely escaped.
+   Markdown   → rendered to HTML.
 ───────────────────────────────────────────────────── */
-const FmtToolbar = (() => {
-  let ta = null;          // textarea element
-  let previewEl = null;   // preview div
-  let previewVisible = false;
-  const MAX_CHARS = 4000;
+window.renderMsgContent = function(text) {
+  if (!text) return '';
+  if (MD.hasMarkdown(text)) {
+    return `<div class="md-content">${MD.render(text)}</div>`;
+  }
+  // Plain text: escape + preserve newlines
+  return MD.esc(text).replace(/\n/g, '<br>');
+};
 
-  const tools = [
-    { label: 'B',      title: 'Bold (Ctrl+B)',        wrap: ['**','**'],    key: 'b' },
-    { label: 'I',      title: 'Italic (Ctrl+I)',       wrap: ['*','*'],      key: 'i' },
-    { label: '</>',    title: 'Inline Code (Ctrl+`)',  wrap: ['`','`'],      key: '`' },
-    { sep: true },
-    { label: '```',    title: 'Code Block',            block: '```\n', blockEnd: '\n```' },
-    { label: '" "',    title: 'Blockquote',            prefix: '> ' },
-    { sep: true },
-    { label: '— H1',  title: 'Heading 1',             prefix: '# ' },
-    { label: '— H2',  title: 'Heading 2',             prefix: '## ' },
-    { sep: true },
-    { label: '• List', title: 'Bullet List',           prefix: '- ' },
-    { label: '1. List',title: 'Numbered List',         prefix: '1. ' },
-    { sep: true },
-    { label: '🔗',     title: 'Link',                  linkDialog: true },
-  ];
 
-  function wrapSelection(before, after) {
-    const start = ta.selectionStart;
-    const end   = ta.selectionEnd;
-    const sel   = ta.value.slice(start, end);
-    const replacement = before + (sel || 'text') + after;
-    ta.setRangeText(replacement, start, end, 'select');
-    ta.focus();
-    updatePreview();
-    updateCounter();
-    // fix selection to just the inner text if nothing was selected
-    if (!sel) {
-      ta.setSelectionRange(start + before.length, start + before.length + 4);
+/* ─────────────────────────────────────────────────────
+   3.  INJECT STYLES
+───────────────────────────────────────────────────── */
+(function injectMdStyles() {
+  if (document.getElementById('mdStyles')) return;
+  const s = document.createElement('style');
+  s.id = 'mdStyles';
+  s.textContent = `
+    /* ── Bubble text wrapper ── */
+    .msg-text { word-break: break-word; white-space: pre-wrap; }
+
+    /* ── Markdown content ── */
+    .md-content { display: inline-block; width: 100%; }
+    .md-content strong { font-weight: 700; }
+    .md-content em     { font-style: italic; }
+    .md-content del    { text-decoration: line-through; opacity: .7; }
+
+    .md-code {
+      font-family: 'DM Mono', 'Fira Mono', monospace;
+      font-size: 12px;
+      background: rgba(0,0,0,.28);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 4px;
+      padding: 1px 5px;
     }
-  }
 
-  function prefixLines(prefix) {
-    const start = ta.selectionStart;
-    const end   = ta.selectionEnd;
-    const before = ta.value.slice(0, start);
-    const selected = ta.value.slice(start, end) || 'item';
-    const after  = ta.value.slice(end);
-    // prefix every selected line
-    const prefixed = selected.split('\n').map(l => prefix + l).join('\n');
-    ta.value = before + prefixed + after;
-    ta.setSelectionRange(start, start + prefixed.length);
-    ta.focus();
-    updatePreview();
-    updateCounter();
-  }
-
-  function insertCodeBlock() {
-    const start = ta.selectionStart;
-    const end   = ta.selectionEnd;
-    const sel   = ta.value.slice(start, end);
-    const block = '```\n' + (sel || 'code here') + '\n```';
-    ta.setRangeText(block, start, end, 'end');
-    ta.focus();
-    updatePreview();
-    updateCounter();
-  }
-
-  function insertLink() {
-    const url   = prompt('Enter URL:', 'https://');
-    if (!url) return;
-    const label = prompt('Enter link text:', 'link') || url;
-    const md    = `[${label}](${url})`;
-    const pos   = ta.selectionStart;
-    ta.setRangeText(md, pos, ta.selectionEnd, 'end');
-    ta.focus();
-    updatePreview();
-    updateCounter();
-  }
-
-  function updatePreview() {
-    if (!previewVisible || !previewEl) return;
-    const rendered = MD.render(ta.value);
-    previewEl.innerHTML = rendered || '<span style="color:var(--txt3);font-size:12px">Preview will appear here…</span>';
-  }
-
-  function updateCounter() {
-    const counter = document.getElementById('fmtCounter');
-    if (!counter) return;
-    const len = ta.value.length;
-    counter.textContent = len > 0 ? `${len}/${MAX_CHARS}` : '';
-    counter.className = 'char-counter' + (len > MAX_CHARS ? ' over' : len > MAX_CHARS * 0.85 ? ' warn' : '');
-  }
-
-  function togglePreview() {
-    previewVisible = !previewVisible;
-    const btn = document.getElementById('fmtPreviewBtn');
-    if (previewEl) {
-      previewEl.classList.toggle('visible', previewVisible);
+    .md-pre {
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 6px 0 2px;
+      overflow-x: auto;
+      font-size: 12px;
+      font-family: 'DM Mono', 'Fira Mono', monospace;
+      white-space: pre;
     }
-    if (btn) btn.classList.toggle('active', previewVisible);
-    if (previewVisible) {
-      updatePreview();
-      ta.style.display = 'none';
-      previewEl.style.display = 'block';
-    } else {
-      ta.style.display = '';
-      previewEl.style.display = 'none';
-      ta.focus();
+
+    .md-bq {
+      border-left: 3px solid var(--acc, #6366f1);
+      margin: 4px 0;
+      padding: 2px 0 2px 10px;
+      color: var(--txt2, #aaa);
+      font-style: italic;
     }
-  }
 
-  function handleKeyboardShortcut(e) {
-    if (!e.ctrlKey && !e.metaKey) return;
-    switch (e.key.toLowerCase()) {
-      case 'b': e.preventDefault(); wrapSelection('**','**'); break;
-      case 'i': e.preventDefault(); wrapSelection('*','*'); break;
-      case '`': e.preventDefault(); wrapSelection('`','`'); break;
+    .md-h { margin: 4px 0 2px; font-weight: 700; line-height: 1.3; }
+    h1.md-h { font-size: 17px; }
+    h2.md-h { font-size: 14px; }
+    h3.md-h { font-size: 13px; }
+
+    .md-ul, .md-ol { margin: 4px 0 4px 18px; padding: 0; }
+    .md-ul li, .md-ol li { margin: 2px 0; }
+
+    .md-content a {
+      color: var(--acc, #6366f1);
+      text-decoration: underline;
+      word-break: break-all;
     }
-  }
 
-  function build() {
-    ta = document.getElementById('msgTa');
-    if (!ta) return;
+    .md-line { display: inline; }
 
-    // ── Wrap input-bar and emoji-bar in a container ──
-    const inputBar  = document.getElementById('inputBar');
-    const emojiBar  = document.getElementById('emojiBar');
-    const recBar    = document.getElementById('recBar');
-    const cwin      = document.getElementById('cwin');
-    if (!inputBar || !cwin) return;
+    /* ── Textarea glow when markdown detected ── */
+    #msgTa.has-md {
+      border-color: var(--acc, #6366f1) !important;
+      box-shadow: 0 0 0 2px rgba(99,102,241,.15);
+    }
 
-    // Create wrapper
-    const wrap = document.createElement('div');
-    wrap.className = 'input-area-wrap';
-    wrap.id = 'inputAreaWrap';
+    /* ── Hint below textarea ── */
+    .md-hint {
+      font-size: 10px;
+      color: var(--txt3, #666);
+      padding: 2px 14px 0;
+      display: none;
+      user-select: none;
+      line-height: 1.4;
+    }
+    .md-hint.visible { display: block; }
+  `;
+  document.head.appendChild(s);
+})();
 
-    // Insert wrapper before inputBar
-    cwin.insertBefore(wrap, emojiBar || inputBar);
 
-    // Move emoji, toolbar, inputBar into wrapper
-    if (emojiBar) wrap.appendChild(emojiBar);
+/* ─────────────────────────────────────────────────────
+   4.  LIVE HINT while typing
+───────────────────────────────────────────────────── */
+(function attachLiveHint() {
+  const _init = () => {
+    const ta = document.getElementById('msgTa');
+    if (!ta) { setTimeout(_init, 300); return; }
 
-    // ── Build toolbar ──
-    const toolbar = document.createElement('div');
-    toolbar.className = 'fmt-toolbar';
-    toolbar.id = 'fmtToolbar';
+    let hint = document.getElementById('mdHint');
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.id = 'mdHint';
+      hint.className = 'md-hint';
+      hint.textContent = '✦ Markdown detected — will render on send';
+      ta.parentNode?.insertBefore(hint, ta.nextSibling);
+    }
 
-    tools.forEach(t => {
-      if (t.sep) {
-        const sep = document.createElement('div');
-        sep.className = 'fmt-sep';
-        toolbar.appendChild(sep);
-        return;
-      }
-      const btn = document.createElement('button');
-      btn.className = 'fmt-btn';
-      btn.title = t.title || '';
-      btn.textContent = t.label;
-      btn.type = 'button';
-      btn.addEventListener('mousedown', e => {
-        e.preventDefault(); // don't blur textarea
-        if (t.linkDialog) { insertLink(); return; }
-        if (t.block !== undefined) { insertCodeBlock(); return; }
-        if (t.prefix) { prefixLines(t.prefix); return; }
-        if (t.wrap) { wrapSelection(t.wrap[0], t.wrap[1]); }
-      });
-      toolbar.appendChild(btn);
-    });
-
-    // separator
-    const sep2 = document.createElement('div');
-    sep2.className = 'fmt-sep';
-    toolbar.appendChild(sep2);
-
-    // Preview toggle
-    const previewBtn = document.createElement('button');
-    previewBtn.className = 'fmt-btn fmt-preview-btn';
-    previewBtn.id = 'fmtPreviewBtn';
-    previewBtn.title = 'Toggle preview';
-    previewBtn.textContent = '👁 Preview';
-    previewBtn.type = 'button';
-    previewBtn.addEventListener('mousedown', e => { e.preventDefault(); togglePreview(); });
-    toolbar.appendChild(previewBtn);
-
-    // Char counter
-    const counter = document.createElement('span');
-    counter.className = 'char-counter';
-    counter.id = 'fmtCounter';
-    toolbar.appendChild(counter);
-
-    wrap.appendChild(toolbar);
-
-    // Preview element (shown instead of textarea)
-    previewEl = document.createElement('div');
-    previewEl.className = 'msg-preview';
-    previewEl.id = 'msgPreview';
-    // insert preview inside ib-field
-    const ibField = inputBar.querySelector('.ib-field');
-    if (ibField) ibField.appendChild(previewEl);
-
-    wrap.appendChild(inputBar);
-    if (recBar) wrap.appendChild(recBar);
-
-    // ── Event listeners on textarea ──
-    ta.addEventListener('keydown', handleKeyboardShortcut);
     ta.addEventListener('input', () => {
-      updatePreview();
-      updateCounter();
+      const hasMd = MD.hasMarkdown(ta.value);
+      hint.classList.toggle('visible', hasMd);
+      ta.classList.toggle('has-md', hasMd);
     });
-  }
-
-  return { build, updatePreview, updateCounter };
-})();
-
-
-/* ─────────────────────────────────────────────────────
-   3.  MOBILE KEYBOARD FIX  (Visual Viewport API)
-───────────────────────────────────────────────────── */
-const KeyboardFix = (() => {
-  function init() {
-    if (typeof visualViewport === 'undefined') return;
-
-    function onResize() {
-      const vv = visualViewport;
-      const windowHeight = window.innerHeight;
-      const viewportHeight = vv.height;
-      // Gap = amount keyboard is covering
-      const keyboardHeight = Math.max(0, windowHeight - viewportHeight - vv.offsetTop);
-      document.documentElement.style.setProperty('--keyboard-offset', keyboardHeight + 'px');
-
-      // Also scroll msgs to bottom when keyboard opens
-      const msgs = document.getElementById('msgs');
-      if (msgs && keyboardHeight > 50) {
-        setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 80);
-      }
-    }
-
-    visualViewport.addEventListener('resize', onResize);
-    visualViewport.addEventListener('scroll', onResize);
-  }
-
-  return { init };
-})();
-
-
-/* ─────────────────────────────────────────────────────
-   4.  OVERRIDE sendTextMsg to render markdown
-   Patches the existing function so outgoing messages
-   are rendered with markdown when the text contains
-   markdown syntax.
-───────────────────────────────────────────────────── */
-function patchSendForMarkdown() {
-  // We hook into the message rendering in app.js by
-  // monkey-patching the message bubble builder if available,
-  // or providing a helper renderMsgContent() that app.js can call.
-
-  // renderMsgContent(text) → safe HTML string
-  window.renderMsgContent = function(text) {
-    if (!text) return '';
-    if (MD.hasMarkdown(text)) {
-      return MD.render(text);
-    }
-    // Plain text: just escape + convert newlines
-    return '<p>' + MD.esc(text).replace(/\n/g, '<br>') + '</p>';
   };
-}
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _init);
+  } else {
+    _init();
+  }
+})();
 
 
 /* ─────────────────────────────────────────────────────
-   5.  INIT  — runs after DOM is ready
+   5.  MOBILE KEYBOARD FIX
 ───────────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', () => {
-  FmtToolbar.build();
-  KeyboardFix.init();
-  patchSendForMarkdown();
-});
+(function initKeyboardFix() {
+  if (typeof visualViewport === 'undefined') return;
+  function onResize() {
+    const vv = visualViewport;
+    const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty('--keyboard-offset', keyboardHeight + 'px');
+    const msgs = document.getElementById('msgs');
+    if (msgs && keyboardHeight > 50) {
+      setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 80);
+    }
+  }
+  visualViewport.addEventListener('resize', onResize);
+  visualViewport.addEventListener('scroll', onResize);
+})();
