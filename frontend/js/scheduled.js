@@ -1,11 +1,4 @@
-// ═══════════════════════════════════════════════════════════════
-//  scheduled.js  —  Scheduled Messages Module
-//  Drop this file in your js/ folder and add:
-//    <script src="js/scheduled.js"></script>
-//  after app.js in index.html
-// ═══════════════════════════════════════════════════════════════
 
-// ── INJECT STYLES ────────────────────────────────────────────
 (function injectScheduledStyles() {
   if (document.getElementById('schedStyles')) return;
   const s = document.createElement('style');
@@ -82,7 +75,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 15px;
+      font-size: 14px;
+      color: var(--acc);
     }
 
     /* Tabs */
@@ -105,6 +99,13 @@
       font-weight: 600;
       padding: 7px 8px;
       transition: all .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    #schedPanel .sp-tab i {
+      font-size: 11px;
     }
     #schedPanel .sp-tab.active {
       background: var(--acc-dim);
@@ -176,7 +177,11 @@
       transition: background .15s;
       white-space: nowrap;
       flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
+    .sched-cancel-btn i { font-size: 10px; }
     .sched-cancel-btn:hover { background: rgba(255,107,114,.22); }
 
     .sched-meta {
@@ -190,8 +195,9 @@
       color: var(--txt2);
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 4px;
     }
+    .sched-meta-chip i { font-size: 10px; color: var(--txt3); }
     .sched-countdown {
       font-size: 10px;
       font-weight: 700;
@@ -202,7 +208,11 @@
       padding: 2px 9px;
       font-family: 'DM Mono', monospace, var(--f);
       letter-spacing: .01em;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
+    .sched-countdown i { font-size: 9px; }
     .sched-recipients {
       display: flex;
       flex-wrap: wrap;
@@ -221,6 +231,7 @@
       font-size: 11px;
       color: var(--acc);
     }
+    .sched-recipient-pill i { font-size: 9px; }
 
     .sched-empty {
       text-align: center;
@@ -228,7 +239,12 @@
       color: var(--txt3);
       font-size: 13px;
     }
-    .sched-empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .sched-empty-icon {
+      font-size: 38px;
+      margin-bottom: 12px;
+      color: var(--txt3);
+      opacity: .5;
+    }
 
     /* ── Compose form ── */
     .sp-field { margin-bottom: 14px; }
@@ -293,6 +309,8 @@
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
       transition: all .13s;
+      font-size: 9px;
+      color: #071525;
     }
     .sp-check.on { background: var(--acc); border-color: var(--acc); }
 
@@ -313,10 +331,11 @@
       font-size: 11px;
       color: var(--acc);
     }
+    .sp-pill i { font-size: 9px; }
     .sp-pill-x {
       cursor: pointer;
       opacity: .6;
-      font-size: 14px;
+      font-size: 11px;
       line-height: 1;
       transition: opacity .13s;
     }
@@ -336,7 +355,12 @@
       margin-top: 4px;
       transition: opacity .15s, transform .13s, box-shadow .15s;
       box-shadow: 0 4px 16px var(--acc-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
+    .sp-submit i { font-size: 13px; }
     .sp-submit:hover { opacity: .92; transform: translateY(-1px); }
     .sp-submit:active { transform: translateY(0); }
     .sp-submit:disabled { opacity: .45; cursor: not-allowed; transform: none; }
@@ -361,7 +385,7 @@
 
 // ── STATE ─────────────────────────────────────────────
 const SCHED = {
-  items: [],           // pending scheduled messages
+  items: [],            // pending scheduled messages
   selectedRecipients: [], // for compose form
   countdownTimers: [],
 };
@@ -402,10 +426,7 @@ function injectSchedButton() {
   btn.id        = 'schedBtn';
   btn.title     = 'Scheduled Messages';
   btn.innerHTML = `
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="12" cy="12" r="10"/>
-      <polyline points="12 6 12 12 16 14"/>
-    </svg>
+    <i class="fa-regular fa-clock"></i>
     <span class="sched-dot"></span>
   `;
   btn.onclick = () => openSchedPanel();
@@ -428,22 +449,22 @@ function openSchedPanel(defaultTab = 'list') {
     <div class="sp-card">
       <div class="sp-head">
         <div class="sp-title">
-          <div class="sp-title-icon">⏰</div>
+          <div class="sp-title-icon">
+            <i class="fa-solid fa-clock"></i>
+          </div>
           Scheduled Messages
         </div>
         <button class="ib" onclick="closeSchedPanel()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
+          <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
 
       <div class="sp-tabs">
         <button class="sp-tab ${defaultTab==='list'?'active':''}" id="spTabList" onclick="schedSwitchTab('list')">
-          📋 Scheduled
+          <i class="fa-solid fa-list"></i> Scheduled
         </button>
         <button class="sp-tab ${defaultTab==='compose'?'active':''}" id="spTabCompose" onclick="schedSwitchTab('compose')">
-          ✦ Schedule New
+          <i class="fa-solid fa-plus"></i> Schedule New
         </button>
       </div>
 
@@ -503,7 +524,9 @@ function schedRenderList() {
   if (!SCHED.items.length) {
     body.innerHTML = `
       <div class="sched-empty">
-        <div class="sched-empty-icon">🕐</div>
+        <div class="sched-empty-icon">
+          <i class="fa-regular fa-clock"></i>
+        </div>
         <div style="font-weight:600;margin-bottom:4px">No scheduled messages</div>
         <div style="font-size:12px;color:var(--txt3)">Tap "Schedule New" to create one</div>
       </div>`;
@@ -517,6 +540,7 @@ function schedRenderList() {
            <span style="font-size:10px;color:var(--txt3)">Also to:</span>
            ${msg.scheduledFor.map(u => `
              <span class="sched-recipient-pill">
+               <i class="fa-solid fa-user"></i>
                ${esc(u.name || u.username || 'User')}
              </span>`).join('')}
          </div>`
@@ -526,12 +550,21 @@ function schedRenderList() {
       <div class="sched-item" id="sitem_${msg._id}">
         <div class="sched-item-top">
           <div class="sched-content">${esc(msg.content || '')}</div>
-          <button class="sched-cancel-btn" onclick="schedCancelMsg('${msg._id}')">Cancel</button>
+          <button class="sched-cancel-btn" onclick="schedCancelMsg('${msg._id}')">
+            <i class="fa-solid fa-xmark"></i> Cancel
+          </button>
         </div>
         <div class="sched-meta">
-          <span class="sched-meta-chip">💬 ${esc(chatName)}</span>
-          <span class="sched-meta-chip">📅 ${schedFormatAbsolute(msg.scheduledAt)}</span>
-          <span class="sched-countdown" id="scd_${msg._id}">${schedFormatRelative(msg.scheduledAt)}</span>
+          <span class="sched-meta-chip">
+            <i class="fa-regular fa-comment"></i> ${esc(chatName)}
+          </span>
+          <span class="sched-meta-chip">
+            <i class="fa-regular fa-calendar"></i> ${schedFormatAbsolute(msg.scheduledAt)}
+          </span>
+          <span class="sched-countdown" id="scd_${msg._id}">
+            <i class="fa-regular fa-hourglass"></i>
+            ${schedFormatRelative(msg.scheduledAt)}
+          </span>
         </div>
         ${recipientsHtml}
       </div>`;
@@ -543,7 +576,8 @@ function schedRenderList() {
     if (!el) return;
     const tid = setInterval(() => {
       if (!document.getElementById(`scd_${msg._id}`)) { clearInterval(tid); return; }
-      el.textContent = schedFormatRelative(msg.scheduledAt);
+      // Keep the icon, update only the text node
+      el.innerHTML = `<i class="fa-regular fa-hourglass"></i> ${schedFormatRelative(msg.scheduledAt)}`;
     }, 30000);
     SCHED.countdownTimers.push(tid);
   });
@@ -586,13 +620,17 @@ function schedRenderCompose() {
   body.innerHTML = `
     <!-- Message -->
     <div class="sp-field">
-      <label class="sp-label">Message</label>
+      <label class="sp-label">
+        <i class="fa-regular fa-message" style="margin-right:4px"></i> Message
+      </label>
       <textarea class="sp-textarea" id="spContent" placeholder="What do you want to say?"></textarea>
     </div>
 
     <!-- Chat -->
     <div class="sp-field">
-      <label class="sp-label">Send to Chat</label>
+      <label class="sp-label">
+        <i class="fa-regular fa-comment-dots" style="margin-right:4px"></i> Send to Chat
+      </label>
       <select class="sp-select" id="spChatId">
         <option value="">— Select a chat —</option>
         ${chatOptions}
@@ -601,7 +639,9 @@ function schedRenderCompose() {
 
     <!-- Time -->
     <div class="sp-field">
-      <label class="sp-label">Send At</label>
+      <label class="sp-label">
+        <i class="fa-regular fa-clock" style="margin-right:4px"></i> Send At
+      </label>
       <input
         type="datetime-local"
         class="sp-input"
@@ -613,16 +653,21 @@ function schedRenderCompose() {
 
     <!-- Extra recipients -->
     <div class="sp-field">
-      <label class="sp-label">Also notify (optional)</label>
-      <input
-        type="text"
-        class="sp-input"
-        id="spRecipSearch"
-        placeholder="Search friends…"
-        autocomplete="off"
-        oninput="schedFilterRecipients()"
-        style="margin-bottom:6px"
-      />
+      <label class="sp-label">
+        <i class="fa-solid fa-user-plus" style="margin-right:4px"></i> Also notify (optional)
+      </label>
+      <div class="finput" style="margin-bottom:6px;border-radius:10px">
+        <i class="fa-solid fa-magnifying-glass fi-icon" style="font-size:13px"></i>
+        <input
+          type="text"
+          class="sp-input"
+          id="spRecipSearch"
+          placeholder="Search friends…"
+          autocomplete="off"
+          oninput="schedFilterRecipients()"
+          style="border:none;background:transparent;padding-left:0;box-shadow:none"
+        />
+      </div>
       <div class="sp-contact-list" id="spContactList">
         ${schedBuildContactList(APP.friends)}
       </div>
@@ -630,7 +675,7 @@ function schedRenderCompose() {
     </div>
 
     <button class="sp-submit" id="spSubmitBtn" onclick="schedSubmit()">
-      Schedule Message →
+      <i class="fa-solid fa-paper-plane"></i> Schedule Message
     </button>
   `;
 }
@@ -660,9 +705,7 @@ function schedBuildContactList(friends, query = '') {
           <div class="sp-contact-user">@${esc(u.username || '')}</div>
         </div>
         <div class="sp-check ${isSelected ? 'on' : ''}" id="spchk_${u._id}">
-          ${isSelected ? `<svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M1.5 5L4 7.5L8.5 2.5" stroke="#071525" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>` : ''}
+          ${isSelected ? `<i class="fa-solid fa-check"></i>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -693,8 +736,11 @@ function schedRenderPills() {
   if (!container) return;
   container.innerHTML = SCHED.selectedRecipients.map(r => `
     <span class="sp-pill">
+      <i class="fa-solid fa-user"></i>
       ${esc(r.name)}
-      <span class="sp-pill-x" onclick="schedToggleRecipient('${r._id}','${esc(r.name)}')">×</span>
+      <span class="sp-pill-x" onclick="schedToggleRecipient('${r._id}','${esc(r.name)}')">
+        <i class="fa-solid fa-xmark"></i>
+      </span>
     </span>
   `).join('');
 }
@@ -714,7 +760,10 @@ async function schedSubmit() {
   const scheduledAt = new Date(timeVal);
   if (scheduledAt <= new Date()) return toast('Please pick a future time', 'err');
 
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Scheduling…'; }
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Scheduling…`;
+  }
 
   const body = {
     chatId,
@@ -738,7 +787,10 @@ async function schedSubmit() {
     schedSwitchTab('list');
   } else {
     toast(r.data?.message || 'Failed to schedule message', 'err');
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Schedule Message →'; }
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Schedule Message`;
+    }
   }
 }
 
@@ -760,9 +812,6 @@ function handleScheduledWSEvents(data) {
 
 // ── INJECT CLOCK BUTTON WHEN CHAT OPENS ───────────────
 // Patch openChat to also inject the button and load pending count
-const _origOpenChat = typeof openChat === 'function' ? openChat : null;
-
-// We monkey-patch by wrapping — safe because openChat is a global function
 (function patchOpenChat() {
   const original = window.openChat;
   if (!original) return;
@@ -787,10 +836,10 @@ document.addEventListener('keydown', e => {
 
 
 // ── Expose globals ────────────────────────────────────
-window.openSchedPanel       = openSchedPanel;
-window.closeSchedPanel      = closeSchedPanel;
-window.schedSwitchTab       = schedSwitchTab;
-window.schedCancelMsg       = schedCancelMsg;
-window.schedFilterRecipients= schedFilterRecipients;
-window.schedToggleRecipient = schedToggleRecipient;
-window.schedSubmit          = schedSubmit;
+window.openSchedPanel        = openSchedPanel;
+window.closeSchedPanel       = closeSchedPanel;
+window.schedSwitchTab        = schedSwitchTab;
+window.schedCancelMsg        = schedCancelMsg;
+window.schedFilterRecipients = schedFilterRecipients;
+window.schedToggleRecipient  = schedToggleRecipient;
+window.schedSubmit           = schedSubmit;
