@@ -62,12 +62,17 @@ const API = (() => {
     // Messages
     getMessages:          (id, pg=1) => r('GET', `/messages/${id}?page=${pg}&limit=50`),
     sendMessage:          b          => r('POST', '/messages', b),
-    editMessage:          (id, b)    => r('PUT',  `/messages/${id}`, b),   // ← NEW
+    editMessage:          (id, b)    => r('PUT',  `/messages/${id}`, b),
     deleteMsg:            id         => r('DELETE', `/messages/${id}`),
     markRead:             id         => r('PUT',  `/messages/${id}/read`),
     markAllRead:          id         => r('PUT',  `/messages/chat/${id}/read`),
     voicemessage:         fd         => r('POST', '/upload/audio', fd, true),
     sendAudioMessage:     b          => r('POST', '/messages', b),
+
+    // ── Scheduled Messages ──────────────────────────
+    scheduleMessage:      b  => r('POST', '/messages/schedule', b),
+    getScheduledMessages: () => r('GET',  '/messages/scheduled/list'),
+    cancelScheduledMsg:   id => r('PUT',  `/messages/${id}/cancel-schedule`),
 
     // Push
     getVapidKey:          () => r('GET',  '/push/vapid-public-key'),
