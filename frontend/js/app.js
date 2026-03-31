@@ -123,6 +123,37 @@ case 'friend_accepted': {
   loadChats();
   break;
 }
+case 'call_offer':
+  handleIncomingCallOffer(data);
+  break;
+
+case 'call_accepted':
+  handleCallAccepted(data);
+  break;
+
+case 'sdp_offer':
+  handleSdpOffer(data);
+  break;
+
+case 'sdp_answer':
+  handleSdpAnswer(data);
+  break;
+
+case 'call_answer':
+  handleCallAnswer(data);
+  break;
+
+case 'ice_candidate':
+  handleIceCandidate(data);
+  break;
+
+case 'call_ended':
+  handleCallEnded();
+  break;
+
+case 'call_rejected':
+  handleCallRejected(data);
+  break;
     default:
       console.log('[WS] Unknown event:', data.type);
   }
@@ -667,6 +698,41 @@ function openChat(id, name, type) {
   }
 
   document.getElementById('welcome').classList.add('hidden');
+  // Inject call buttons into header
+const actions = document.querySelector('.cw-head-actions');
+if (actions) {
+  // Remove old call buttons
+  actions.querySelectorAll('.call-btn').forEach(b => b.remove());
+  if (type === 'direct') {
+    const chat2  = APP.chats.find(c => c._id === id);
+    const other2 = chat2 ? otherParticipant(chat2) : null;
+    const pid    = other2?._id || '';
+    const pname  = other2?.name || other2?.username || name;
+    const ppic   = other2?.profilePicture || '';
+
+    const audioBtn = document.createElement('button');
+    audioBtn.className = 'ib call-btn';
+    audioBtn.title = 'Voice call';
+    audioBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+    audioBtn.onclick = () => startCall(id, pid, pname, ppic, 'audio');
+
+    const videoBtn = document.createElement('button');
+    videoBtn.className = 'ib call-btn';
+    videoBtn.title = 'Video call';
+    videoBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`;
+    videoBtn.onclick = () => startCall(id, pid, pname, ppic, 'video');
+
+    // Insert before refresh button
+    const refreshBtn = actions.querySelector('button[title="Refresh"]');
+    if (refreshBtn) {
+      actions.insertBefore(audioBtn, refreshBtn);
+      actions.insertBefore(videoBtn, refreshBtn);
+    } else {
+      actions.appendChild(audioBtn);
+      actions.appendChild(videoBtn);
+    }
+  }
+}
   document.getElementById('cwin').classList.remove('hidden');
   closeSb();
   document.getElementById('fab').classList.add('hidden');

@@ -137,7 +137,27 @@ function handleClientMessage(userId, data) {
                 readAt: new Date().toISOString(),
             });
             break;
-
+           case 'call_offer':
+case 'call_accepted':
+case 'call_rejected':
+case 'call_ended':
+case 'sdp_offer':
+case 'sdp_answer':
+case 'call_answer':
+case 'ice_candidate': {
+  // Relay call signaling directly to the target peer
+  const targetId = String(data.to);
+  const relayed  = sendToUser(targetId, { ...data, from: userId });
+  if (!relayed) {
+    // Target is offline — notify caller
+    sendToUser(userId, {
+      type:   'call_rejected',
+      chatId: data.chatId,
+      reason: 'offline',
+    });
+  }
+  break;
+}
         default:
             console.log('[WS] Unknown message type from client:', data.type);
     }
