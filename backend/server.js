@@ -37,7 +37,7 @@ app.use('/api/subscription/webhook',
 
 // Fixed: Configure CORS only once
 app.use(cors({
-  origin: [process.env.CORS_ORIGIN, process.env.CORST_TEST_ORIGIN],
+  origin: [process.env.CORS_ORIGIN, process.env.CORST_TEST_ORIGIN , "*"],
   credentials: true,              
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

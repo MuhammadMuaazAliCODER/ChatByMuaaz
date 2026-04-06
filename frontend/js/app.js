@@ -24,6 +24,7 @@ function connectWS() {
   clearTimeout(_wsReconnectTimer);
   try {
     _ws = new WebSocket(`ws://localhost:5300?token=${token}`);
+    
   } catch (e) {
     console.error('WS init failed:', e);
     return;
