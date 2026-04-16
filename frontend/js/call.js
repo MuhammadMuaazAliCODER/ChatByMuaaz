@@ -11,6 +11,8 @@ const CALL = {
   callStartTime: null,
   durationTimer: null,
   iceCandidateQueue: [],
+  _callAccepted: false,
+  _pendingSdpOffer: false,
 };
 
 const ICE_SERVERS = {
@@ -185,11 +187,13 @@ function buildCallOverlay() {
 async function startCall(chatId, peerId, peerName, peerPic, type = 'audio') {
   if (CALL.pc) { toast('Already in a call', 'err'); return; }
 
-  CALL.chatId    = chatId;
-  CALL.peerId    = peerId;
-  CALL.peerName  = peerName;
-  CALL.callType  = type;
-  CALL.isCaller  = true;
+  CALL.chatId        = chatId;
+  CALL.peerId        = peerId;
+  CALL.peerName      = peerName;
+  CALL.callType      = type;
+  CALL.isCaller      = true;
+  CALL._callAccepted = false;
+  CALL._pendingSdpOffer = false;
 
   buildCallOverlay();
   showCallOverlay(peerName, peerPic, 'Calling…', type);
@@ -213,10 +217,19 @@ async function startCall(chatId, peerId, peerName, peerPic, type = 'audio') {
 
   createPeerConnection();
 
+  // Add tracks — this will trigger onnegotiationneeded, but we gate it
+  // behind _callAccepted so the offer only goes out after the callee answers.
   CALL.localStream.getTracks().forEach(t => CALL.pc.addTrack(t, CALL.localStream));
 
-  // Signal the callee via WebSocket
-  sendWS({ type: 'call_offer', to: peerId, chatId, callType: type, from: APP.me._id, fromName: APP.me.name || APP.me.username });
+  // Signal the callee via WebSocket (ring notification only — no SDP here)
+  sendWS({
+    type: 'call_offer',
+    to: peerId,
+    chatId,
+    callType: type,
+    from: APP.me._id,
+    fromName: APP.me.name || APP.me.username,
+  });
 }
 
 // ── HANDLE INCOMING call_offer (callee side) ──────────
@@ -227,12 +240,12 @@ function handleIncomingCallOffer(data) {
     return;
   }
 
-  CALL.chatId   = data.chatId;
-  CALL.peerId   = data.from;
-  CALL.peerName = data.fromName || 'Unknown';
-  CALL.callType = data.callType || 'audio';
-  CALL.isCaller = false;
-  CALL._pendingOffer = data; // store for when user answers
+  CALL.chatId        = data.chatId;
+  CALL.peerId        = data.from;
+  CALL.peerName      = data.fromName || 'Unknown';
+  CALL.callType      = data.callType || 'audio';
+  CALL.isCaller      = false;
+  CALL._pendingOffer = data; // store for when user taps Answer
 
   buildCallOverlay();
 
@@ -246,15 +259,17 @@ function handleIncomingCallOffer(data) {
   const fr = document.getElementById('icFrom');
   const ty = document.getElementById('icType');
 
-  if (pic) { av.innerHTML = `<img src="${pic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
-  else { av.textContent = name[0]?.toUpperCase() || '?'; av.style.background = ac(name); }
+  if (pic) {
+    av.innerHTML = `<img src="${pic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  } else {
+    av.textContent = name[0]?.toUpperCase() || '?';
+    av.style.background = ac(name);
+  }
 
   fr.textContent = name;
-  // Use FA icon + label for call type
-  const typeIcon = data.callType === 'video'
+  ty.innerHTML = data.callType === 'video'
     ? '<i class="fa-solid fa-video"></i> Video call'
     : '<i class="fa-solid fa-phone"></i> Voice call';
-  ty.innerHTML = typeIcon;
   ic.classList.remove('hidden');
 
   playRingtone(true);
@@ -292,11 +307,9 @@ async function answerCall() {
   createPeerConnection();
   CALL.localStream.getTracks().forEach(t => CALL.pc.addTrack(t, CALL.localStream));
 
-  // ── FIX: call_offer carries NO SDP — it is only a ring notification.
-  // The real SDP exchange happens via sdp_offer → sdp_answer (triggered by
-  // onnegotiationneeded on the caller side after they receive call_accepted).
-  // Do NOT call setRemoteDescription here; handleSdpOffer() handles it.
+  // Tell the caller we're ready — they will now send us the sdp_offer
   sendWS({ type: 'call_accepted', to: CALL.peerId, chatId: CALL.chatId, from: APP.me._id });
+  console.log('[WebRTC] call_accepted sent to caller');
 }
 
 // ── REJECT INCOMING CALL ──────────────────────────────
@@ -337,7 +350,7 @@ function createPeerConnection() {
       rv.srcObject = CALL.remoteStream;
       if (CALL.callType === 'video') rv.style.display = 'block';
     }
-    // For audio-only: play through an audio element
+    // For audio-only: play through a hidden audio element
     if (CALL.callType === 'audio') {
       let audio = document.getElementById('remoteAudio');
       if (!audio) {
@@ -350,53 +363,84 @@ function createPeerConnection() {
     }
   };
 
+  // ── KEY FIX: gate the offer behind _callAccepted ──────
+  // onnegotiationneeded fires as soon as tracks are added (before the callee
+  // has even answered). We buffer it and only actually send the offer once
+  // we receive call_accepted from the callee.
   CALL.pc.onnegotiationneeded = async () => {
-    // Only the caller initiates the offer
-    if (!CALL.isCaller) return;
-    try {
-      const offer = await CALL.pc.createOffer();
-      await CALL.pc.setLocalDescription(offer);
-      sendWS({ type: 'sdp_offer', to: CALL.peerId, chatId: CALL.chatId, sdp: offer });
-    } catch (e) {
-      console.error('[WebRTC] negotiationneeded error:', e);
+    if (!CALL.isCaller) return; // callee never initiates the offer
+    if (!CALL._callAccepted) {
+      // Callee hasn't answered yet — remember we need to send offer later
+      console.log('[WebRTC] onnegotiationneeded fired early — buffering until call_accepted');
+      CALL._pendingSdpOffer = true;
+      return;
     }
+    await _sendSdpOffer();
   };
 }
 
-// ── HANDLE call_accepted (caller side) ────────────────
-async function handleCallAccepted(data) {
-  const statusEl = document.getElementById('coStatus');
-  if (statusEl) statusEl.textContent = 'Connected…';
-  // Offer is triggered by onnegotiationneeded after tracks are added
+// ── HELPER: build and send the SDP offer ─────────────
+async function _sendSdpOffer() {
+  if (!CALL.pc) return;
+  try {
+    const offer = await CALL.pc.createOffer();
+    await CALL.pc.setLocalDescription(offer);
+    sendWS({ type: 'sdp_offer', to: CALL.peerId, chatId: CALL.chatId, sdp: offer });
+    console.log('[WebRTC] sdp_offer sent');
+  } catch (e) {
+    console.error('[WebRTC] _sendSdpOffer error:', e);
+  }
 }
 
-// ── HANDLE sdp_offer (callee receives offer) ──────────
+// ── HANDLE call_accepted (caller side) ────────────────
+// THIS is the correct place to kick off the SDP exchange.
+async function handleCallAccepted(data) {
+  console.log('[WebRTC] call_accepted received — triggering sdp_offer');
+  const statusEl = document.getElementById('coStatus');
+  if (statusEl) statusEl.textContent = 'Connecting…';
+
+  CALL._callAccepted = true;
+
+  // Send the offer now (onnegotiationneeded may have already fired and buffered it)
+  await _sendSdpOffer();
+}
+
+// ── HANDLE sdp_offer (callee receives offer from caller) ──
 async function handleSdpOffer(data) {
-  if (!CALL.pc) return;
+  if (!CALL.pc) {
+    console.warn('[WebRTC] handleSdpOffer: no PeerConnection, ignoring.');
+    return;
+  }
   if (!data.sdp || !data.sdp.type) {
     console.warn('[WebRTC] handleSdpOffer: missing or invalid SDP, ignoring.');
     return;
   }
   try {
+    console.log('[WebRTC] sdp_offer received — setting remote description');
     await CALL.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
     flushIceCandidateQueue();
     const answer = await CALL.pc.createAnswer();
     await CALL.pc.setLocalDescription(answer);
     sendWS({ type: 'sdp_answer', to: CALL.peerId, chatId: CALL.chatId, sdp: answer });
+    console.log('[WebRTC] sdp_answer sent');
   } catch (e) {
     console.error('[WebRTC] handleSdpOffer error:', e);
   }
 }
 
-// ── HANDLE sdp_answer (caller receives answer) ────────
+// ── HANDLE sdp_answer (caller receives answer from callee) ──
 async function handleSdpAnswer(data) {
   if (!CALL.pc) return;
   if (!data.sdp || !data.sdp.type) {
     console.warn('[WebRTC] handleSdpAnswer: missing or invalid SDP, ignoring.');
     return;
   }
-  if (CALL.pc.signalingState === 'stable') return;
+  if (CALL.pc.signalingState === 'stable') {
+    console.warn('[WebRTC] handleSdpAnswer: already stable, ignoring.');
+    return;
+  }
   try {
+    console.log('[WebRTC] sdp_answer received — setting remote description');
     await CALL.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
     flushIceCandidateQueue();
   } catch (e) {
@@ -404,7 +448,7 @@ async function handleSdpAnswer(data) {
   }
 }
 
-// ── HANDLE call_answer (initial callee SDP from answerCall) ──
+// ── HANDLE call_answer (alias — kept for backwards compat) ──
 async function handleCallAnswer(data) {
   await handleSdpAnswer(data);
 }
@@ -414,8 +458,9 @@ async function handleIceCandidate(data) {
   const candidate = new RTCIceCandidate(data.candidate);
   if (CALL.pc && CALL.pc.remoteDescription) {
     try { await CALL.pc.addIceCandidate(candidate); }
-    catch (e) { console.error('[WebRTC] ICE error:', e); }
+    catch (e) { console.error('[WebRTC] ICE addIceCandidate error:', e); }
   } else {
+    // Queue it until remote description is set
     CALL.iceCandidateQueue.push(candidate);
   }
 }
@@ -441,7 +486,9 @@ function handleCallEnded() {
 }
 
 function handleCallRejected(data) {
-  const msg = data.reason === 'busy' ? 'User is busy' : 'Call declined';
+  const msg = data.reason === 'busy'    ? 'User is busy'
+            : data.reason === 'offline' ? 'User is offline'
+            : 'Call declined';
   toast(msg, 'err', 3000);
   resetCall();
 }
@@ -456,13 +503,15 @@ function resetCall() {
   }
   if (CALL.pc) { CALL.pc.close(); CALL.pc = null; }
 
-  CALL.chatId    = null;
-  CALL.peerId    = null;
-  CALL.peerName  = null;
-  CALL.callType  = null;
-  CALL.isCaller  = false;
-  CALL.remoteStream = null;
+  CALL.chatId           = null;
+  CALL.peerId           = null;
+  CALL.peerName         = null;
+  CALL.callType         = null;
+  CALL.isCaller         = false;
+  CALL.remoteStream     = null;
   CALL.iceCandidateQueue = [];
+  CALL._callAccepted    = false;
+  CALL._pendingSdpOffer = false;
   delete CALL._pendingOffer;
 
   const ov = document.getElementById('callOverlay');
@@ -482,7 +531,6 @@ function CALL_toggleMute() {
   const btn = document.getElementById('btnMute');
   if (btn) {
     btn.classList.toggle('active', !track.enabled);
-    // Swap icon: microphone ↔ microphone-slash
     btn.innerHTML = track.enabled
       ? '<i class="fa-solid fa-microphone"></i>'
       : '<i class="fa-solid fa-microphone-slash"></i>';
@@ -497,7 +545,6 @@ function CALL_toggleCam() {
   const btn = document.getElementById('btnCam');
   if (btn) {
     btn.classList.toggle('active', !track.enabled);
-    // Swap icon: video ↔ video-slash
     btn.innerHTML = track.enabled
       ? '<i class="fa-solid fa-video"></i>'
       : '<i class="fa-solid fa-video-slash"></i>';
@@ -513,8 +560,12 @@ function showCallOverlay(name, pic, status, type) {
   const st  = document.getElementById('coStatus');
   const cam = document.getElementById('btnCam');
 
-  if (pic) { av.innerHTML = `<img src="${pic}" style="width:100%;height:100%;object-fit:cover">`; }
-  else { av.textContent = name[0]?.toUpperCase() || '?'; av.style.background = ac(name); }
+  if (pic) {
+    av.innerHTML = `<img src="${pic}" style="width:100%;height:100%;object-fit:cover">`;
+  } else {
+    av.textContent = name[0]?.toUpperCase() || '?';
+    av.style.background = ac(name);
+  }
 
   nm.textContent = name;
   st.textContent = status;
@@ -548,6 +599,8 @@ function stopCallDurationTimer() {
 }
 
 // ── RINGTONE ──────────────────────────────────────────
+// AudioContext must be created/resumed after a user gesture.
+// We create a fresh context each beep and immediately resume it.
 let _ringtoneCtx   = null;
 let _ringtoneTimer = null;
 
@@ -555,15 +608,25 @@ function playRingtone(on) {
   if (!on) {
     clearInterval(_ringtoneTimer);
     _ringtoneTimer = null;
-    if (_ringtoneCtx) { try { _ringtoneCtx.close(); } catch (_) {} _ringtoneCtx = null; }
+    if (_ringtoneCtx) {
+      try { _ringtoneCtx.close(); } catch (_) {}
+      _ringtoneCtx = null;
+    }
     return;
   }
+
   const beep = () => {
     try {
+      // Close previous context to avoid accumulation
+      if (_ringtoneCtx) { try { _ringtoneCtx.close(); } catch (_) {} }
       _ringtoneCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Resume in case browser suspended it (autoplay policy)
+      if (_ringtoneCtx.state === 'suspended') _ringtoneCtx.resume();
+
       const osc  = _ringtoneCtx.createOscillator();
       const gain = _ringtoneCtx.createGain();
-      osc.connect(gain); gain.connect(_ringtoneCtx.destination);
+      osc.connect(gain);
+      gain.connect(_ringtoneCtx.destination);
       osc.frequency.value = 660;
       gain.gain.setValueAtTime(0.2, _ringtoneCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, _ringtoneCtx.currentTime + 0.4);
@@ -571,14 +634,17 @@ function playRingtone(on) {
       osc.stop(_ringtoneCtx.currentTime + 0.4);
     } catch (_) {}
   };
+
   beep();
   _ringtoneTimer = setInterval(beep, 1200);
 }
 
 // ── WS HELPER (sends via the app's _ws) ───────────────
 function sendWS(data) {
-  if (_ws && _ws.readyState === 1) {
+  if (typeof _ws !== 'undefined' && _ws && _ws.readyState === 1) {
     _ws.send(JSON.stringify(data));
+  } else {
+    console.warn('[WebRTC] sendWS: WebSocket not open, dropping message:', data.type);
   }
 }
 

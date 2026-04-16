@@ -43,7 +43,7 @@ export const initSocket = (server) => {
             clients.set(userId, ws);
             onlineUsers.add(userId);
 
-            // ── (Optional) Persist online status to DB ──────────────────
+            // ── Persist online status to DB ─────────────────────────────
             try {
                 await User.findByIdAndUpdate(userId, { online: true, lastSeen: new Date() });
             } catch (dbErr) {
@@ -137,27 +137,33 @@ function handleClientMessage(userId, data) {
                 readAt: new Date().toISOString(),
             });
             break;
-           case 'call_offer':
-case 'call_accepted':
-case 'call_rejected':
-case 'call_ended':
-case 'sdp_offer':
-case 'sdp_answer':
-case 'call_answer':
-case 'ice_candidate': {
-  // Relay call signaling directly to the target peer
-  const targetId = String(data.to);
-  const relayed  = sendToUser(targetId, { ...data, from: userId });
-  if (!relayed) {
-    // Target is offline — notify caller
-    sendToUser(userId, {
-      type:   'call_rejected',
-      chatId: data.chatId,
-      reason: 'offline',
-    });
-  }
-  break;
-}
+
+        // ── WebRTC call signaling — relay directly to the target peer ──
+        case 'call_offer':
+        case 'call_accepted':
+        case 'call_rejected':
+        case 'call_ended':
+        case 'sdp_offer':
+        case 'sdp_answer':
+        case 'call_answer':
+        case 'ice_candidate': {
+            const targetId = String(data.to);
+            console.log(`[WS] Relaying ${data.type} from ${userId} → ${targetId}`);
+
+            const relayed = sendToUser(targetId, { ...data, from: userId });
+
+            if (!relayed) {
+                console.warn(`[WS] Target ${targetId} is offline — notifying caller`);
+                // Target is offline — let the caller know
+                sendToUser(userId, {
+                    type:   'call_rejected',
+                    chatId: data.chatId,
+                    reason: 'offline',
+                });
+            }
+            break;
+        }
+
         default:
             console.log('[WS] Unknown message type from client:', data.type);
     }
@@ -192,8 +198,6 @@ export const sendToUser = (userId, data) => {
  */
 export const sendMessageNotification = async (recipientIds, messageData, unreadCount = 1) => {
     // Guard: accept both a single userId string and an array of userIds.
-    // Without this, iterating a plain string loops over each character ("6","8","a"…)
-    // which causes Mongoose CastErrors when those single chars hit the DB.
     const ids = Array.isArray(recipientIds) ? recipientIds : [recipientIds];
 
     const senderName   = messageData.sender?.name || messageData.sender?.username || 'Someone';
@@ -210,7 +214,6 @@ export const sendMessageNotification = async (recipientIds, messageData, unreadC
                 type: 'new_message',
                 message: {
                     ...messageData,
-                    // Ensure sender is always an object with enough info for the notification banner
                     sender: {
                         _id:            messageData.sender?._id || messageData.sender,
                         name:           senderName,
@@ -218,7 +221,7 @@ export const sendMessageNotification = async (recipientIds, messageData, unreadC
                         profilePicture: senderAvatar,
                     },
                 },
-                unreadCount, // frontend uses this to update badge
+                unreadCount,
                 playSound: true,
             });
         } else {
@@ -229,7 +232,7 @@ export const sendMessageNotification = async (recipientIds, messageData, unreadC
                     body:  preview,
                     icon:  senderAvatar || '/icons/icon-192x192.png',
                     badge: '/icons/badge-72x72.png',
-                    tag:   `chat-${messageData.chatId}`,   // Replaces previous notif for same chat
+                    tag:   `chat-${messageData.chatId}`,
                     renotify: false,
                     data: {
                         chatId:    messageData.chatId,
