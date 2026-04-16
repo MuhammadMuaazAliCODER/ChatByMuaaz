@@ -88,6 +88,7 @@ function injectCallStyles() {
     .cc-btn.mute  { background: rgba(255,255,255,.12); color: #e8e8f0; }
     .cc-btn.cam   { background: rgba(255,255,255,.12); color: #e8e8f0; }
     .cc-btn.active { background: rgba(255,255,255,.25); }
+    .cc-btn i { font-size: 18px; pointer-events: none; }
 
     /* Incoming call card */
     #incomingCall {
@@ -105,16 +106,17 @@ function injectCallStyles() {
     #incomingCall.hidden { display: none; }
     .ic-info { flex: 1; min-width: 0; }
     .ic-from { font-size: 15px; font-weight: 700; color: #e8e8f0; }
-    .ic-type { font-size: 12px; color: #7a8aa0; margin-top: 2px; }
+    .ic-type { font-size: 12px; color: #7a8aa0; margin-top: 2px; display: flex; align-items: center; gap: 5px; }
+    .ic-type i { font-size: 11px; }
     .ic-btns { display: flex; gap: 10px; }
-    .ic-ans { background: #22c55e; color: #fff; border: none; border-radius: 50%; width: 46px; height: 46px; font-size: 20px; cursor: pointer; transition: transform .12s; }
+    .ic-ans { background: #22c55e; color: #fff; border: none; border-radius: 50%; width: 46px; height: 46px; font-size: 18px; cursor: pointer; transition: transform .12s; display: flex; align-items: center; justify-content: center; }
     .ic-ans:hover { transform: scale(1.1); }
-    .ic-rej { background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 46px; height: 46px; font-size: 18px; cursor: pointer; transition: transform .12s; }
+    .ic-rej { background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 46px; height: 46px; font-size: 16px; cursor: pointer; transition: transform .12s; display: flex; align-items: center; justify-content: center; }
     .ic-rej:hover { transform: scale(1.1); }
 
     @keyframes pulse-ring {
-      0% { box-shadow: 0 0 0 0 rgba(34,197,94,.5); }
-      70% { box-shadow: 0 0 0 16px rgba(34,197,94,0); }
+      0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.5); }
+      70%  { box-shadow: 0 0 0 16px rgba(34,197,94,0); }
       100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
     }
     .ic-ans { animation: pulse-ring 1.4s infinite; }
@@ -141,9 +143,15 @@ function buildCallOverlay() {
       <div class="co-duration hidden" id="coDuration">0:00</div>
       <div class="co-status" id="coStatus">Calling…</div>
       <div class="co-controls">
-        <button class="cc-btn mute"  id="btnMute" onclick="CALL_toggleMute()"   title="Mute">🎤</button>
-        <button class="cc-btn end"   onclick="endCall(true)"                    title="End">📵</button>
-        <button class="cc-btn cam hidden" id="btnCam" onclick="CALL_toggleCam()" title="Camera">📷</button>
+        <button class="cc-btn mute"       id="btnMute" onclick="CALL_toggleMute()"    title="Mute">
+          <i class="fa-solid fa-microphone"></i>
+        </button>
+        <button class="cc-btn end"        onclick="endCall(true)"                     title="End call">
+          <i class="fa-solid fa-phone-slash"></i>
+        </button>
+        <button class="cc-btn cam hidden" id="btnCam"  onclick="CALL_toggleCam()"    title="Camera">
+          <i class="fa-solid fa-video"></i>
+        </button>
       </div>
     </div>
   `;
@@ -157,11 +165,17 @@ function buildCallOverlay() {
     <div class="co-avatar" id="icAvatar" style="width:50px;height:50px;font-size:18px;margin:0">?</div>
     <div class="ic-info">
       <div class="ic-from" id="icFrom">Someone</div>
-      <div class="ic-type" id="icType">Incoming call</div>
+      <div class="ic-type" id="icType">
+        <i class="fa-solid fa-phone"></i> Incoming call
+      </div>
     </div>
     <div class="ic-btns">
-      <button class="ic-ans" onclick="answerCall()" title="Answer">📞</button>
-      <button class="ic-rej" onclick="rejectCall()" title="Reject">✕</button>
+      <button class="ic-ans" onclick="answerCall()" title="Answer">
+        <i class="fa-solid fa-phone"></i>
+      </button>
+      <button class="ic-rej" onclick="rejectCall()" title="Reject">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
     </div>
   `;
   document.body.appendChild(ic);
@@ -225,7 +239,6 @@ function handleIncomingCallOffer(data) {
   const peer = APP._userCache[data.from] || {};
   const pic  = peer.profilePicture || '';
   const name = data.fromName || peer.name || peer.username || 'Unknown';
-  const typeLabel = data.callType === 'video' ? '📹 Video call' : '📞 Voice call';
 
   // Show incoming card
   const ic = document.getElementById('incomingCall');
@@ -237,7 +250,11 @@ function handleIncomingCallOffer(data) {
   else { av.textContent = name[0]?.toUpperCase() || '?'; av.style.background = ac(name); }
 
   fr.textContent = name;
-  ty.textContent = typeLabel;
+  // Use FA icon + label for call type
+  const typeIcon = data.callType === 'video'
+    ? '<i class="fa-solid fa-video"></i> Video call'
+    : '<i class="fa-solid fa-phone"></i> Voice call';
+  ty.innerHTML = typeIcon;
   ic.classList.remove('hidden');
 
   playRingtone(true);
@@ -275,14 +292,10 @@ async function answerCall() {
   createPeerConnection();
   CALL.localStream.getTracks().forEach(t => CALL.pc.addTrack(t, CALL.localStream));
 
-  // Set remote description from the offer
-  await CALL.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-  flushIceCandidateQueue();
-
-  const answer = await CALL.pc.createAnswer();
-  await CALL.pc.setLocalDescription(answer);
-
-  sendWS({ type: 'call_answer', to: CALL.peerId, chatId: CALL.chatId, sdp: answer });
+  // ── FIX: call_offer carries NO SDP — it is only a ring notification.
+  // The real SDP exchange happens via sdp_offer → sdp_answer (triggered by
+  // onnegotiationneeded on the caller side after they receive call_accepted).
+  // Do NOT call setRemoteDescription here; handleSdpOffer() handles it.
   sendWS({ type: 'call_accepted', to: CALL.peerId, chatId: CALL.chatId, from: APP.me._id });
 }
 
@@ -360,19 +373,35 @@ async function handleCallAccepted(data) {
 // ── HANDLE sdp_offer (callee receives offer) ──────────
 async function handleSdpOffer(data) {
   if (!CALL.pc) return;
-  await CALL.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-  flushIceCandidateQueue();
-  const answer = await CALL.pc.createAnswer();
-  await CALL.pc.setLocalDescription(answer);
-  sendWS({ type: 'sdp_answer', to: CALL.peerId, chatId: CALL.chatId, sdp: answer });
+  if (!data.sdp || !data.sdp.type) {
+    console.warn('[WebRTC] handleSdpOffer: missing or invalid SDP, ignoring.');
+    return;
+  }
+  try {
+    await CALL.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    flushIceCandidateQueue();
+    const answer = await CALL.pc.createAnswer();
+    await CALL.pc.setLocalDescription(answer);
+    sendWS({ type: 'sdp_answer', to: CALL.peerId, chatId: CALL.chatId, sdp: answer });
+  } catch (e) {
+    console.error('[WebRTC] handleSdpOffer error:', e);
+  }
 }
 
 // ── HANDLE sdp_answer (caller receives answer) ────────
 async function handleSdpAnswer(data) {
   if (!CALL.pc) return;
+  if (!data.sdp || !data.sdp.type) {
+    console.warn('[WebRTC] handleSdpAnswer: missing or invalid SDP, ignoring.');
+    return;
+  }
   if (CALL.pc.signalingState === 'stable') return;
-  await CALL.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-  flushIceCandidateQueue();
+  try {
+    await CALL.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    flushIceCandidateQueue();
+  } catch (e) {
+    console.error('[WebRTC] handleSdpAnswer error:', e);
+  }
 }
 
 // ── HANDLE call_answer (initial callee SDP from answerCall) ──
@@ -447,12 +476,17 @@ function resetCall() {
 // ── IN-CALL CONTROLS ──────────────────────────────────
 function CALL_toggleMute() {
   if (!CALL.localStream) return;
-  const track  = CALL.localStream.getAudioTracks()[0];
+  const track = CALL.localStream.getAudioTracks()[0];
   if (!track) return;
   track.enabled = !track.enabled;
   const btn = document.getElementById('btnMute');
-  if (btn) btn.classList.toggle('active', !track.enabled);
-  btn.textContent = track.enabled ? '🎤' : '🔇';
+  if (btn) {
+    btn.classList.toggle('active', !track.enabled);
+    // Swap icon: microphone ↔ microphone-slash
+    btn.innerHTML = track.enabled
+      ? '<i class="fa-solid fa-microphone"></i>'
+      : '<i class="fa-solid fa-microphone-slash"></i>';
+  }
 }
 
 function CALL_toggleCam() {
@@ -461,7 +495,13 @@ function CALL_toggleCam() {
   if (!track) return;
   track.enabled = !track.enabled;
   const btn = document.getElementById('btnCam');
-  if (btn) btn.classList.toggle('active', !track.enabled);
+  if (btn) {
+    btn.classList.toggle('active', !track.enabled);
+    // Swap icon: video ↔ video-slash
+    btn.innerHTML = track.enabled
+      ? '<i class="fa-solid fa-video"></i>'
+      : '<i class="fa-solid fa-video-slash"></i>';
+  }
 }
 
 // ── OVERLAY HELPERS ───────────────────────────────────
@@ -503,12 +543,12 @@ function startCallDurationTimer() {
 
 function stopCallDurationTimer() {
   clearInterval(CALL.durationTimer);
-  CALL.durationTimer    = null;
-  CALL.callStartTime    = null;
+  CALL.durationTimer = null;
+  CALL.callStartTime = null;
 }
 
 // ── RINGTONE ──────────────────────────────────────────
-let _ringtoneCtx = null;
+let _ringtoneCtx   = null;
 let _ringtoneTimer = null;
 
 function playRingtone(on) {
