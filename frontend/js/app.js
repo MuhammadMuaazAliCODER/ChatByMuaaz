@@ -824,7 +824,13 @@ function renderMessages(msgs) {
         </div>`;
       } else {
         const sender = cachedUser(msg.sender) || other || {};
-        senderBlock  = `<div style="display:flex;align-items:flex-end;gap:5px;margin-bottom:2px">${makeAv(sender, 'xs', false)}</div>`;
+        senderBlock  = `<div style="display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    margin-bottom: 5px;
+    margin-top: -6px;
+    margin-left: -9px;">${makeAv(sender, 'xs', false)}</div>`;
       }
     }
 
