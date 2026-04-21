@@ -8,6 +8,8 @@ import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import { promisify } from 'util';
 
+// import { uploadToCloudinary, unlinkAsync } from '../config/cloudinary.js'
+
 dotenv.config();
 
 // Promisify fs.unlink for async/await
